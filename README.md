@@ -12,7 +12,11 @@ The goal of this project is to create specialized agents, chains and graphs that
 * Analyze logs
 * Detect security vulnerabilities and recommend action plans
 
-## Supported providers
+The project is based on Langchain.
+
+## Providers
+
+The project aims to provide support for the following providers:
 
 * Proxmox Virtual Environment
 * VMWare

@@ -2,7 +2,9 @@
 
 ## Description
 
-This project provides the PowerfulAPIChain class which subclasses Langchain's APIChain to provide support for more HTTP methods.
+The API chain allows users to interact with APIs using natural language. It can be used to provision resources on public clouds or virtualization platforms.
+
+This module provides the PowerfulAPIChain class which subclasses Langchain's APIChain to provide support for more HTTP methods.
 
 ## Getting started
 
@@ -18,6 +20,16 @@ pip install -r requirements.txt
 
 ## Roadmap
 
+Implemented HTTP methods:
+
+* GET
+* POST
+* DELETE
+* PUT
+* PATCH
+
+## Roadmap
+
 * [X] Test HTTP GET request
 * [X] Test HTTP POST request
 * [ ] Test HTTP PUT request
@@ -27,4 +39,4 @@ pip install -r requirements.txt
 * [ ] Implement async support
 * [ ] Optimize API docs formatting
 * [ ] Optimize default prompt templates
-* [ ] Document most performing prompting strategies
+* [ ] Document recommended prompting strategies
