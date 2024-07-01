@@ -18,32 +18,37 @@ class PowerfulAPIChain(APIChain):
               run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
-        request_info = self.api_request_chain.predict(
-            question=question, api_docs=self.api_docs, callbacks=_run_manager.get_child()
+        request_info: str = self.api_request_chain.predict(
+            question=question,
+            api_docs=self.api_docs,
+            callbacks=_run_manager.get_child()
         )
         if self.verbose:
             print(f'Request info: {request_info}')
 
         try:
-            api_url, request_method, body = request_info.split('|', 2)
+            api_url, request_method, request_body = request_info.split('|', 2)
         except Exception as e:
             return {self.output_key: "", "error": f"Output parse error: {str(e)}"}
-        
-        api_url, request_method, body = api_url.strip().replace('|', ''), request_method.strip().replace('|', ''), body.strip().replace('|', '')
+
+        api_url = api_url.strip().replace('|', '')
+        request_method = request_method.strip().lower().replace('|', '')
+        request_body = request_body.strip().replace('|', '')
 
         if self.verbose:
-            print(f"\nAPI URL: {api_url}")
-            print(f"\nRequest method: {request_method}")
-            print(f"\nRequest body: {body}")
+            print(
+                f"""API URL: {api_url}"
+                    Request method: {request_method.upper()}
+                    Request body: {request_body}"""
+            )
 
         # Resolve the method name
-        request_method_lower = request_method.lower()
-        request_func = getattr(self.requests_wrapper, request_method_lower)
+        request_func = getattr(self.requests_wrapper, request_method)
 
-        if request_method_lower in ["get", "delete", "head"]:
+        if request_method in ["get", "delete", "head"]:
             api_response = request_func(api_url)
         else:
-            api_response = request_func(api_url, json.loads(body))
+            api_response = request_func(api_url, json.loads(request_body))
 
         answer = self.api_answer_chain.predict(
             question=question,
@@ -59,7 +64,7 @@ class PowerfulAPIChain(APIChain):
         cls,
         llm: BaseLanguageModel,
         api_docs: str,
-        headers: Optional[dict] = None,
+        headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
         **kwargs: Any,
