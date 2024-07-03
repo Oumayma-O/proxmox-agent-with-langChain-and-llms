@@ -14,7 +14,7 @@ llm = ChatOllama(model="llama3")
 # Load embedding Model
 embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# Load, chunk and index the contents of the blog.
+# Load the contents of the inventory from mongodb.
 loader = MongodbLoader(
         connection_string="mongodb://localhost:27017/",
         db_name="proxmox_dummy",
