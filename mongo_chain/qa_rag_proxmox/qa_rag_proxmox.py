@@ -1,20 +1,17 @@
-import bs4
-from langchain import hub
 from langchain_chroma import Chroma
 from langchain_community.document_loaders.mongodb import MongodbLoader
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
 from langchain_community.chat_models import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 
 # Model instantiation
-llm = ChatOllama(model="llama3")
-# Load embedding Model
+llm = ChatOllama(model="llama3:instruct")
+# Load embeddings model
 embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# Load the contents of the inventory from mongodb.
+# Load the contents of the inventory from MongoDB
 loader = MongodbLoader(
         connection_string="mongodb://localhost:27017/",
         db_name="proxmox_dummy",
@@ -22,7 +19,7 @@ loader = MongodbLoader(
 
 )
 docs = loader.load()
-# Prompt stuff
+
 system_prompt = (
     "You are an assistant for question-answering tasks. "
     "Use the following pieces of retrieved context to answer "
@@ -39,15 +36,10 @@ prompt = ChatPromptTemplate.from_messages(
         ("human", "{question}"),
     ]
 )
-#text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200, add_start_index=True)
-#splits = text_splitter.split_documents(docs)
-#
+
 vectorstore = Chroma.from_documents(documents=docs, embedding=embedding_function)
-#
-#
-# Retrieve and generate using the relevant snippets of the blog.
+
 retriever = vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1})
-retrieved_docs = retriever.invoke("How many CPUs does the VM K8S-WORKER-NODE-1 have?")
 
 
 def format_docs(docs):
@@ -59,6 +51,7 @@ rag_chain = (
     | llm
     | StrOutputParser()
 )
+
 while True:
     try:
         question = input("question > ")

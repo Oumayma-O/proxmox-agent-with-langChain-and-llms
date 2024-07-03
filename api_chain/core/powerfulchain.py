@@ -39,7 +39,10 @@ class PowerfulAPIChain(APIChain):
         try:
             api_url, request_method, request_body = request_info.split('|', 2)
         except ValueError as e:
-            return {self.output_key: "", "error": f"Output parse error: {str(e)}"}
+            return {
+                self.output_key: "",
+                "error": f"Output parse error: {str(e)}"
+            }
 
         api_url = api_url.strip().replace('|', '')
         request_method = request_method.strip().lower().replace('|', '')
@@ -50,10 +53,10 @@ class PowerfulAPIChain(APIChain):
             print(f"Request method: {request_method.upper()}")
             print(f"Request body: {request_body}")
 
-        # Resolve the method name
+        # Resolve the method nby ame
         request_func = getattr(self.requests_wrapper, request_method)
 
-        if request_method in ["get", "delete", "head"]:
+        if request_method in ("get", "delete", "head"):
             api_response = request_func(api_url)
         else:
             api_response = request_func(api_url, json.loads(request_body))
@@ -83,7 +86,10 @@ class PowerfulAPIChain(APIChain):
         try:
             api_url, request_method, request_body = request_info.split('|', 2)
         except ValueError as e:
-            return {self.output_key: "", "error": f"Output parse error: {str(e)}"}
+            return {
+                self.output_key: "",
+                "error": f"Output parse error: {str(e)}"
+            }
 
         api_url = api_url.strip().replace('|', '')
         request_method = request_method.strip().lower().replace('|', '')
@@ -94,7 +100,7 @@ class PowerfulAPIChain(APIChain):
             print(f"Request method: {request_method.upper()}")
             print(f"Request body: {request_body}")
 
-        # Resolve the method name
+        # Resolve the method by name
         request_func = getattr(self.requests_wrapper, f"a{request_method}")
 
         if request_method in ("get", "delete", "head"):

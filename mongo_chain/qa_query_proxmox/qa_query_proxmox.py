@@ -10,7 +10,6 @@ from langchain_core.prompts import PromptTemplate
 from config import ConfigData
 import json
 import pymongo
-import re
 from operator import itemgetter
 import dirtyjson
 
@@ -24,7 +23,6 @@ client = pymongo.MongoClient(ConfigData.MONGO_DB_URI)
 db = client[ConfigData.DB_NAME]
 collection_name = db[ConfigData.COLLECTION_NAME]
 
-# Prompt stuff
 query_creation_template= """
     You are an expert in crafting MongoDB aggregation pipeline queries. 
     Given the document schema and schema description in a specific format, 
@@ -58,7 +56,7 @@ answer_prompt = PromptTemplate(
     template=answer_template,
     input_variables=["question", "query", "result"]
 )
-# Custom function that executes queries against a mongodb database
+# Custom function that executes queries against a MongoDB database
 def execute_pipeline(raw_pipeline: str):
     print(f"DEBUG: RAW: {raw_pipeline}")
     pipeline = dirtyjson.loads(raw_pipeline)
