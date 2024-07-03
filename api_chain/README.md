@@ -20,23 +20,18 @@ pip install -r requirements.txt
 
 ## Roadmap
 
-Implemented HTTP methods:
-
-* GET
-* POST
-* DELETE
-* PUT
-* PATCH
-
-## Roadmap
-
 * [X] Test HTTP GET request
 * [X] Test HTTP POST request
 * [ ] Test HTTP PUT request
 * [ ] Test HTTP DELETE request
 * [ ] Test HTTP PATCH request
-* [ ] Implement HTTP HEAD
-* [ ] Implement async support
+* [X] Implement async support
 * [ ] Optimize API docs formatting
 * [ ] Optimize default prompt templates
 * [ ] Document recommended prompting strategies
+* [ ] Implement a verification process that checks whether the LLM successfully processed the request
+* [ ] Construct a graph of agents that can provision resources on multiple cloud providers and virtualization platforms
+* [ ] Implement Langfuse for tracing
+* [ ] Implement Langcheck or Guardrails for LLM validation
+
+---
