@@ -1,0 +1,5 @@
+langchain
+langchain-core
+langchain-community
+langchain-chroma
+bs4

@@ -1,0 +1,4 @@
+pymongo
+langchain
+langchain-community
+langchain-core
