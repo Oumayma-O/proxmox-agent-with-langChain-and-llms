@@ -1,9 +1,11 @@
 import json
-
-from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
-from langchain.chains import APIChain
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence, Tuple
 from pydantic import Field
+
+from langchain.chains import APIChain
+from langchain.chains.api.base import (
+    _check_in_allowed_domain,
+)
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_community.utilities.requests import TextRequestsWrapper
@@ -11,6 +13,12 @@ from langchain_core.language_models import BaseLanguageModel
 from langchain_core.callbacks import (
     AsyncCallbackManagerForChainRun,
     CallbackManagerForChainRun,
+)
+
+from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
+
+SUPPORTED_HTTP_METHODS: Tuple[str] = (
+    "get", "post", "put", "patch", "delete"
 )
 
 
@@ -45,6 +53,12 @@ class PowerfulAPIChain(APIChain):
             }
 
         api_url = api_url.strip().replace('|', '')
+        if self.limit_to_domains and not _check_in_allowed_domain(
+            api_url, self.limit_to_domains
+        ):
+            raise ValueError(
+                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
+            )
         request_method = request_method.strip().lower().replace('|', '')
         request_body = request_body.strip().replace('|', '')
 
@@ -53,13 +67,20 @@ class PowerfulAPIChain(APIChain):
             print(f"Request method: {request_method.upper()}")
             print(f"Request body: {request_body}")
 
-        # Resolve the method nby ame
+        # Resolve the method by name
         request_func = getattr(self.requests_wrapper, request_method)
 
-        if request_method in ("get", "delete", "head"):
+        if request_method in ("get", "delete"):
             api_response = request_func(api_url)
-        else:
+        elif request_method in ("post", "put", "patch"):
             api_response = request_func(api_url, json.loads(request_body))
+        else:
+            raise ValueError(
+                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
+            )
+        run_manager.on_text(
+            str(api_response), color="yellow", end="\n", verbose=self.verbose
+        )
 
         answer = self.api_answer_chain.predict(
             question=question,
@@ -75,7 +96,7 @@ class PowerfulAPIChain(APIChain):
                      run_manager: Optional[AsyncCallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or AsyncCallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
-        request_info: str = await self.api_request_chain.apredict(
+        request_info = await self.api_request_chain.apredict(
             question=question,
             api_docs=self.api_docs,
             callbacks=_run_manager.get_child()
@@ -92,6 +113,12 @@ class PowerfulAPIChain(APIChain):
             }
 
         api_url = api_url.strip().replace('|', '')
+        if self.limit_to_domains and not _check_in_allowed_domain(
+            api_url, self.limit_to_domains
+        ):
+            raise ValueError(
+                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
+            )
         request_method = request_method.strip().lower().replace('|', '')
         request_body = request_body.strip().replace('|', '')
 
@@ -103,10 +130,17 @@ class PowerfulAPIChain(APIChain):
         # Resolve the method by name
         request_func = getattr(self.requests_wrapper, f"a{request_method}")
 
-        if request_method in ("get", "delete", "head"):
+        if request_method in ("get", "delete"):
             api_response = await request_func(api_url)
-        else:
+        elif request_method in ("post", "put", "patch"):
             api_response = await request_func(api_url, json.loads(request_body))
+        else:
+            raise ValueError(
+                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
+            )
+        await run_manager.on_text(
+            str(api_response), color="yellow", end="\n", verbose=self.verbose
+        )
 
         answer = await self.api_answer_chain.apredict(
             question=question,
@@ -138,3 +172,7 @@ class PowerfulAPIChain(APIChain):
             api_docs=api_docs,
             **kwargs,
         )
+
+    @property
+    def _chain_type(self) -> str:
+        return "powerful_api_chain"
