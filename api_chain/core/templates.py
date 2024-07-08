@@ -7,14 +7,14 @@ You should build the API url in order to get a response that is as short as poss
 while still getting the necessary information to answer the question.
 Pay attention to deliberately exclude any unnecessary pieces of data in the API call.
 You should extract the request METHOD from doc, and generate the BODY data in JSON format according to the user question if necessary.
-The BODY data could be empty dict.
+The BODY data could be an empty dict.
 
 Question:
 {question}
 
 """
 
-API_REQUEST_PROMPT_TEMPLATE = API_URL_PROMPT_TEMPLATE + """Output the API url, METHOD and BODY, join them with `|`. DO NOT GIVE ANY EXPLANATION."""
+API_REQUEST_PROMPT_TEMPLATE = API_URL_PROMPT_TEMPLATE + """Output the API url, METHOD, BODY, and required Authentication header. Join them with `|`. DO NOT GIVE ANY EXPLANATION."""
 
 API_REQUEST_PROMPT = PromptTemplate(
     input_variables=[
@@ -27,6 +27,7 @@ API_REQUEST_PROMPT = PromptTemplate(
 API_RESPONSE_PROMPT_TEMPLATE = (
     API_URL_PROMPT_TEMPLATE
     + """API url: {api_url}
+Authentication header: {auth_header}
 
 Here is the response from the API:
 
@@ -38,6 +39,6 @@ Summary:"""
 )
 
 API_RESPONSE_PROMPT = PromptTemplate(
-    input_variables=["api_docs", "question", "api_url", "api_response"],
+    input_variables=["api_docs", "question", "api_url", "auth_header", "api_response"],
     template=API_RESPONSE_PROMPT_TEMPLATE,
 )
