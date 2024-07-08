@@ -1,8 +1,5 @@
 import json
-import logging
-from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
-from langchain.chains import APIChain
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence, Tuple
 from pydantic import Field
 
 from langchain.chains import APIChain
@@ -17,15 +14,17 @@ from langchain_core.callbacks import (
     CallbackManagerForChainRun,
 )
 
-# Set up logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
+
+SUPPORTED_HTTP_METHODS: Tuple[str] = (
+    "get", "post", "put", "patch", "delete"
+)
+
 
 class PowerfulAPIChain(APIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
     requests_wrapper: TextRequestsWrapper = Field(exclude=True)
-    headers: Optional[Dict[str, Any]] = None
     api_docs: str
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
@@ -36,32 +35,21 @@ class PowerfulAPIChain(APIChain):
               run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
-        
-        # Log the question
-        logger.debug(f"Question: {question}")
-        
         request_info: str = self.api_request_chain.predict(
             question=question,
             api_docs=self.api_docs,
             callbacks=_run_manager.get_child()
         )
-        
-        # Log the raw request_info
-        logger.debug(f"Raw request info: {request_info}")
+        if self.verbose:
+            print(f'Request info: {request_info}')
 
         try:
             api_url, request_method, request_body = request_info.split('|', 2)
         except ValueError as e:
-            logger.error(f"Error parsing request info: {e}")
             return {
                 self.output_key: "",
                 "error": f"Output parse error: {str(e)}"
             }
-
-        # Log the parsed components
-        logger.debug(f"API URL: {api_url}")
-        logger.debug(f"Request method: {request_method}")
-        logger.debug(f"Request body: {request_body}")
 
         api_url = api_url.strip().replace('|', '')
         if self.limit_to_domains and not _check_in_allowed_domain(
@@ -73,40 +61,33 @@ class PowerfulAPIChain(APIChain):
         request_method = request_method.strip().lower().replace('|', '')
         request_body = request_body.strip().replace('|', '')
 
-        # Log the cleaned components
-        logger.debug(f"Cleaned API URL: {api_url}")
-        logger.debug(f"Cleaned Request method: {request_method}")
-        logger.debug(f"Cleaned Request body: {request_body}")
+        if self.verbose:
+            print(f"API URL: {api_url}")
+            print(f"Request method: {request_method.upper()}")
+            print(f"Request body: {request_body}")
 
         # Resolve the method by name
         request_func = getattr(self.requests_wrapper, request_method)
 
-        if request_method in ("get", "delete", "head"):
-            api_response = request_func(api_url, headers=self.headers)
+        if request_method in ("get", "delete"):
+            api_response = request_func(api_url)
+        elif request_method in ("post", "put", "patch"):
+            api_response = request_func(api_url, json.loads(request_body))
         else:
-            api_response = request_func(api_url, json.loads(request_body), headers=self.headers)
-
-        # Log the API response
-        api_response_text = api_response.text if hasattr(api_response, 'text') else api_response
-        logger.debug(f"API response: {api_response_text}")
-
-        try:
-            api_response_json = api_response.json()
-        except json.JSONDecodeError:
-            logger.error("Failed to parse response JSON")
-            api_response_json = {"error": "Failed to parse response JSON"}
+            raise ValueError(
+                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
+            )
+        run_manager.on_text(
+            str(api_response), color="yellow", end="\n", verbose=self.verbose
+        )
 
         answer = self.api_answer_chain.predict(
             question=question,
             api_docs=self.api_docs,
             api_url=api_url,
-            api_response=api_response_json,
+            api_response=api_response,
             callbacks=_run_manager.get_child()
         )
-        
-        # Log the final answer
-        logger.debug(f"Final answer: {answer}")
-
         return {self.output_key: answer}
 
     async def _acall(self,
@@ -119,7 +100,8 @@ class PowerfulAPIChain(APIChain):
             api_docs=self.api_docs,
             callbacks=_run_manager.get_child()
         )
-        logger.debug(f'Request info: {request_info}')
+        if self.verbose:
+            print(f'Request info: {request_info}')
 
         try:
             api_url, request_method, request_body = request_info.split('|', 2)
@@ -139,9 +121,10 @@ class PowerfulAPIChain(APIChain):
         request_method = request_method.strip().lower().replace('|', '')
         request_body = request_body.strip().replace('|', '')
 
-        logger.debug(f"API URL: {api_url}")
-        logger.debug(f"Request method: {request_method.upper()}")
-        logger.debug(f"Request body: {request_body}")
+        if self.verbose:
+            print(f"API URL: {api_url}")
+            print(f"Request method: {request_method.upper()}")
+            print(f"Request body: {request_body}")
 
         # Resolve the method by name
         request_func = getattr(self.requests_wrapper, f"a{request_method}")
@@ -182,7 +165,6 @@ class PowerfulAPIChain(APIChain):
         requests_wrapper = PowerfulRequestsWrapper(headers=headers)
         get_answer_chain = LLMChain(llm=llm, prompt=api_response_prompt)
         return cls(
-            headers=headers,
             api_request_chain=get_request_chain,
             api_answer_chain=get_answer_chain,
             requests_wrapper=requests_wrapper,
@@ -190,3 +172,6 @@ class PowerfulAPIChain(APIChain):
             **kwargs,
         )
 
+    @property
+    def _chain_type(self) -> str:
+        return "powerful_api_chain"
