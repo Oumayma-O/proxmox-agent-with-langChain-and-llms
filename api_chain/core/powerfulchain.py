@@ -36,7 +36,7 @@ class PowerfulAPIChain(APIChain):
               run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
-        request_info: str = self.api_request_chain.predict(
+        request_info = self.api_request_chain.predict(
             question=question,
             api_docs=self.api_docs,
             callbacks=_run_manager.get_child()

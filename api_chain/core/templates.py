@@ -1,20 +1,25 @@
 from langchain.prompts.prompt import PromptTemplate
 
-API_URL_PROMPT_TEMPLATE = """You are given the below API Documentation:
-{api_docs}
-Using this documentation, generate the full API url to call for answering the user question.
-You should build the API url in order to get a response that is as short as possible,
-while still getting the necessary information to answer the question.
-Pay attention to deliberately exclude any unnecessary pieces of data in the API call.
-You should extract the request METHOD from doc, and generate the BODY data in JSON format according to the user question if necessary.
-The BODY data could be empty dict.
+API_REQUEST_PROMPT_TEMPLATE = """
+Given the following API Documentation: {api_docs}
+Your task is to construct the most efficient API URL to answer 
+the user's question, ensuring the 
+call is optimized to include only necessary information.
+If a parameter is not required and does not have a
+default value, do NOT include it in the API URL, unless you think
+it's relevant to the user's question.
+You MUST extract the API URL, request METHOD and generate the BODY data in JSON format
+according to the user question if necessary.
+The parameters' names and BODY data keys MUST be obtained from the provided context.
+Do NOT make up parameters' names.
+The BODY data can be an empty JSON.
+Output the API URL, METHOD and BODY. Join them with `|`. DO NOT GIVE ANY EXPLANATION.
 
-Question:
-{question}
+Question: {question}
+
+Output:
 
 """
-
-API_REQUEST_PROMPT_TEMPLATE = API_URL_PROMPT_TEMPLATE + """Output the API url, METHOD and BODY, join them with `|`. DO NOT GIVE ANY EXPLANATION."""
 
 API_REQUEST_PROMPT = PromptTemplate(
     input_variables=[
@@ -24,18 +29,17 @@ API_REQUEST_PROMPT = PromptTemplate(
     template=API_REQUEST_PROMPT_TEMPLATE,
 )
 
-API_RESPONSE_PROMPT_TEMPLATE = (
-    API_URL_PROMPT_TEMPLATE
-    + """API url: {api_url}
+API_RESPONSE_PROMPT_TEMPLATE = """
+With the following official API Documentation: {api_docs} 
+and the specific user question: {question} in mind,
+and given this API URL: {api_url} for querying, here is the 
+response from the API: {api_response}. 
+Do NOT include technical details like response format.
+Do NOT include any thoughts or internal processes.
+You MUST provide a clear, relevant and concise answer.
 
-Here is the response from the API:
-
-{api_response}
-
-Summarize this response to answer the original question.
-
-Summary:"""
-)
+Response:
+"""
 
 API_RESPONSE_PROMPT = PromptTemplate(
     input_variables=["api_docs", "question", "api_url", "api_response"],
