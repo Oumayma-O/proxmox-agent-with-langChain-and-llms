@@ -29,7 +29,6 @@ class PowerfulAPIChain(APIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
-    requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
     api_docs: str
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
@@ -167,7 +166,6 @@ class PowerfulAPIChain(APIChain):
     ) -> 'PowerfulAPIChain':
         """Load chain from just an LLM and the api docs."""
         get_request_chain = LLMChain(llm=llm, prompt=api_url_prompt)
-        requests_wrapper = PowerfulRequestsWrapper(headers=headers)
         requests_wrapper = PowerfulRequestsWrapper(headers=headers)
         get_answer_chain = LLMChain(llm=llm, prompt=api_response_prompt)
         return cls(
