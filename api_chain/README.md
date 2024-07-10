@@ -29,7 +29,6 @@ pip install -r requirements.txt
 * [ ] Optimize API docs formatting
 * [ ] Optimize default prompt templates
 * [ ] Document recommended prompting strategies
-* [ ] Implement a verification process that checks whether the LLM successfully processed the request
 * [ ] Construct a graph of agents that can provision resources on multiple cloud providers and virtualization platforms
 * [ ] Implement Langfuse for tracing
 * [ ] Implement Langcheck or Guardrails for LLM validation
