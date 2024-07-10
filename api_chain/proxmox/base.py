@@ -14,21 +14,21 @@ from langchain_core.callbacks import (
     CallbackManagerForChainRun,
 )
 
-from core.templates import (
-    API_REQUEST_PROMPT,
-    API_RESPONSE_PROMPT
-)
-from core.requests import PowerfulRequestsWrapper
+from api_chain.core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
+from api_chain.core.requests import PowerfulRequestsWrapper
+from proxmox.docs import proxmox_api_docs
+from proxmox.utils import _validate_headers
 
 SUPPORTED_HTTP_METHODS: Tuple[str] = (
     "get", "post", "put", "patch", "delete"
 )
 
 
-class PowerfulAPIChain(APIChain):
+class ProxmoxAPIChain(APIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
+    pve_token: str
     api_docs: str
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
@@ -158,14 +158,16 @@ class PowerfulAPIChain(APIChain):
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
-        api_docs: str,
+        api_docs: str = proxmox_api_docs,
+        pve_token: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
         **kwargs: Any,
-    ) -> 'PowerfulAPIChain':
+    ) -> 'ProxmoxAPIChain':
         """Load chain from just an LLM and the api docs."""
         get_request_chain = LLMChain(llm=llm, prompt=api_url_prompt)
+        headers = _validate_headers(headers=headers, pve_token=pve_token)
         requests_wrapper = PowerfulRequestsWrapper(headers=headers)
         get_answer_chain = LLMChain(llm=llm, prompt=api_response_prompt)
         return cls(
@@ -178,4 +180,4 @@ class PowerfulAPIChain(APIChain):
 
     @property
     def _chain_type(self) -> str:
-        return "powerful_api_chain"
+        return "proxmox_api_chain"
