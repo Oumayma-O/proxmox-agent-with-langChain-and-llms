@@ -1,4 +1,5 @@
 import json
+from langchain.vectorstores import Chroma
 from typing import Any, Dict, Optional, Sequence, Tuple
 from pydantic import Field
 
@@ -14,8 +15,8 @@ from langchain_core.callbacks import (
     CallbackManagerForChainRun,
 )
 
-from api_chain.core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
-from api_chain.core.requests import PowerfulRequestsWrapper
+from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
+from core.requests import PowerfulRequestsWrapper
 from proxmox.docs import proxmox_api_docs
 from proxmox.utils import _validate_headers
 
@@ -23,13 +24,12 @@ SUPPORTED_HTTP_METHODS: Tuple[str] = (
     "get", "post", "put", "patch", "delete"
 )
 
-
 class ProxmoxAPIChain(APIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
     pve_token: str
-    api_docs: str
+    vectorstore: Chroma
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
@@ -39,9 +39,14 @@ class ProxmoxAPIChain(APIChain):
               run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
+
+        retriever = self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1})
+
+        retrieved_docs = retriever.get_relevant_documents(question)
+
         request_info = self.api_request_chain.predict(
             question=question,
-            api_docs=self.api_docs,
+            docs=retrieved_docs,
             callbacks=_run_manager.get_child()
         )
         if self.verbose:
@@ -87,7 +92,7 @@ class ProxmoxAPIChain(APIChain):
 
         answer = self.api_answer_chain.predict(
             question=question,
-            api_docs=self.api_docs,
+            docs=retrieved_docs,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
@@ -99,9 +104,14 @@ class ProxmoxAPIChain(APIChain):
                      run_manager: Optional[AsyncCallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or AsyncCallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
+
+        retriever = self.vectorstore.as_retriever(search_type="similarity", search_kwargs={"k": 1})
+
+        retrieved_docs = retriever.get_relevant_documents(question)
+
         request_info = await self.api_request_chain.apredict(
             question=question,
-            api_docs=self.api_docs,
+            docs=retrieved_docs,
             callbacks=_run_manager.get_child()
         )
         if self.verbose:
@@ -147,7 +157,7 @@ class ProxmoxAPIChain(APIChain):
 
         answer = await self.api_answer_chain.apredict(
             question=question,
-            api_docs=self.api_docs,
+            docs=retrieved_docs,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
@@ -158,8 +168,8 @@ class ProxmoxAPIChain(APIChain):
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
-        api_docs: str = proxmox_api_docs,
-        pve_token: Optional[str] = None,
+        vectorstore: Chroma,
+        pve_token: Optional[str] = "",
         headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
@@ -174,7 +184,8 @@ class ProxmoxAPIChain(APIChain):
             api_request_chain=get_request_chain,
             api_answer_chain=get_answer_chain,
             requests_wrapper=requests_wrapper,
-            api_docs=api_docs,
+            vectorstore=vectorstore,
+            pve_token=pve_token,  # Ensure pve_token is passed here
             **kwargs,
         )
 
