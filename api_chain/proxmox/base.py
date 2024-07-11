@@ -42,7 +42,7 @@ class ProxmoxAPIChain(APIChain):
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
 
-        retrieved_docs = self.retriever.get_relevant_documents(question)
+        retrieved_docs = self.retriever.get_relevant_documents(query=question)
 
         request_info = self.api_request_chain.predict(
             question=question,
@@ -105,7 +105,7 @@ class ProxmoxAPIChain(APIChain):
         _run_manager = run_manager or AsyncCallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
 
-        retrieved_docs = self.retriever.get_relevant_documents(question)
+        retrieved_docs = self.retriever.get_relevant_documents(query=question)
 
         request_info = await self.api_request_chain.apredict(
             question=question,
