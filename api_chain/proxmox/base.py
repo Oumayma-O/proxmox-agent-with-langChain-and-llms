@@ -44,9 +44,11 @@ class ProxmoxAPIChain(APIChain):
 
         retrieved_docs = self.retriever.get_relevant_documents(query=question)
 
+        all_retrieved_content = "\n".join(doc.page_content for doc in retrieved_docs)
+
         request_info = self.api_request_chain.predict(
             question=question,
-            api_docs=retrieved_docs,
+            api_docs=all_retrieved_content,
             callbacks=_run_manager.get_child()
         )
         if self.verbose:
@@ -92,7 +94,7 @@ class ProxmoxAPIChain(APIChain):
 
         answer = self.api_answer_chain.predict(
             question=question,
-            api_docs= retrieved_docs,
+            api_docs=all_retrieved_content,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
@@ -107,9 +109,11 @@ class ProxmoxAPIChain(APIChain):
 
         retrieved_docs = self.retriever.get_relevant_documents(query=question)
 
+        all_retrieved_content = "\n".join(doc.page_content for doc in retrieved_docs)
+
         request_info = await self.api_request_chain.apredict(
             question=question,
-            api_docs=retrieved_docs,
+            api_docs=all_retrieved_content,
             callbacks=_run_manager.get_child()
         )
         if self.verbose:
@@ -155,7 +159,7 @@ class ProxmoxAPIChain(APIChain):
 
         answer = await self.api_answer_chain.apredict(
             question=question,
-            api_docs=retrieved_docs,
+            api_docs=all_retrieved_content,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
