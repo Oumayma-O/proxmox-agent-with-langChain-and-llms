@@ -1,34 +1,26 @@
 import json
-from typing import Any, Dict, Optional, Sequence, Tuple
-from langchain_core.pydantic_v1 import Field
-
+import logging
+from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from langchain.chains import APIChain
-from langchain.chains.api.base import (
-    _check_in_allowed_domain,
-)
+from typing import Any, Dict, Optional, Sequence
+from pydantic import Field
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
+from langchain_community.utilities.requests import TextRequestsWrapper
 from langchain_core.language_models import BaseLanguageModel
 from langchain_core.callbacks import (
     AsyncCallbackManagerForChainRun,
     CallbackManagerForChainRun,
 )
 
-from core.templates import (
-    API_REQUEST_PROMPT,
-    API_RESPONSE_PROMPT
-)
-from core.requests import PowerfulRequestsWrapper
-
-SUPPORTED_HTTP_METHODS: Tuple[str] = (
-    "get", "post", "put", "patch", "delete"
-)
-
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 class PowerfulAPIChain(APIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
-    requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
+    requests_wrapper: TextRequestsWrapper = Field(exclude=True)
     api_docs: str
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
@@ -39,62 +31,71 @@ class PowerfulAPIChain(APIChain):
               run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
-        request_info = self.api_request_chain.invoke(
-            {
-                "question": question,
-                "api_docs": self.api_docs,
-            },
+        
+        # Log the question
+        logger.debug(f"Question: {question}")
+        
+        request_info: str = self.api_request_chain.predict(
+            question=question,
+            api_docs=self.api_docs,
             callbacks=_run_manager.get_child()
-        )['text']
-        if self.verbose:
-            print(f"\nRequest info: {request_info}")
+        )
+        
+        # Log the raw request_info
+        logger.debug(f"Raw request info: {request_info}")
 
-        request_info_list = request_info.split('|')
+        try:
+            api_url, request_method, request_body = request_info.split('|', 2)
+        except ValueError as e:
+            logger.error(f"Error parsing request info: {e}")
+            return {
+                self.output_key: "",
+                "error": f"Output parse error: {str(e)}"
+            }
 
-        if len(request_info_list) < 3:
-            raise ValueError("Request info parse error")
-
-        api_url, request_method, request_body = request_info_list[:3]
+        # Log the parsed components
+        logger.debug(f"API URL: {api_url}")
+        logger.debug(f"Request method: {request_method}")
+        logger.debug(f"Request body: {request_body}")
 
         api_url = api_url.strip().replace('|', '')
-        if self.limit_to_domains and not _check_in_allowed_domain(
-            api_url, self.limit_to_domains
-        ):
-            raise ValueError(
-                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
-            )
         request_method = request_method.strip().lower().replace('|', '')
         request_body = request_body.strip().replace('|', '')
 
-        if self.verbose:
-            print(f"API URL: {api_url}")
-            print(f"Request method: {request_method.upper()}")
-            print(f"Request body: {request_body}")
+        # Log the cleaned components
+        logger.debug(f"Cleaned API URL: {api_url}")
+        logger.debug(f"Cleaned Request method: {request_method}")
+        logger.debug(f"Cleaned Request body: {request_body}")
 
         # Resolve the method by name
         request_func = getattr(self.requests_wrapper, request_method)
 
-        if request_method in ("get", "delete"):
-            api_response = request_func(api_url)
-        elif request_method in ("post", "put", "patch"):
-            api_response = request_func(api_url, json.loads(request_body))
+        if request_method in ("get", "delete", "head"):
+            api_response = request_func(api_url, headers=self.headers)
         else:
-            raise ValueError(
-                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
-            )
-        run_manager.on_text(
-            str(api_response), color="yellow", end="\n", verbose=self.verbose
-        )
+            api_response = request_func(api_url, json.loads(request_body), headers=self.headers)
 
-        answer = self.api_answer_chain.invoke(
-            {
-                "question": question,
-                "api_docs": self.api_docs,
-                "api_url": api_url,
-                "api_response": api_response,
-            },
+        # Log the API response
+        api_response_text = api_response.text if hasattr(api_response, 'text') else api_response
+        logger.debug(f"API response: {api_response_text}")
+
+        try:
+            api_response_json = api_response.json()
+        except json.JSONDecodeError:
+            logger.error("Failed to parse response JSON")
+            api_response_json = {"error": "Failed to parse response JSON"}
+
+        answer = self.api_answer_chain.predict(
+            question=question,
+            api_docs=self.api_docs,
+            api_url=api_url,
+            api_response=api_response_json,
             callbacks=_run_manager.get_child()
-        )['text']
+        )
+        
+        # Log the final answer
+        logger.debug(f"Final answer: {answer}")
+
         return {self.output_key: answer}
 
     async def _acall(self,
@@ -102,13 +103,12 @@ class PowerfulAPIChain(APIChain):
                      run_manager: Optional[AsyncCallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or AsyncCallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
-        request_info = await self.api_request_chain.apredict(
+        request_info: str = await self.api_request_chain.apredict(
             question=question,
             api_docs=self.api_docs,
             callbacks=_run_manager.get_child()
         )
-        if self.verbose:
-            print(f'Request info: {request_info}')
+        logger.debug(f'Request info: {request_info}')
 
         try:
             api_url, request_method, request_body = request_info.split('|', 2)
@@ -119,34 +119,20 @@ class PowerfulAPIChain(APIChain):
             }
 
         api_url = api_url.strip().replace('|', '')
-        if self.limit_to_domains and not _check_in_allowed_domain(
-            api_url, self.limit_to_domains
-        ):
-            raise ValueError(
-                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
-            )
         request_method = request_method.strip().lower().replace('|', '')
         request_body = request_body.strip().replace('|', '')
 
-        if self.verbose:
-            print(f"API URL: {api_url}")
-            print(f"Request method: {request_method.upper()}")
-            print(f"Request body: {request_body}")
+        logger.debug(f"API URL: {api_url}")
+        logger.debug(f"Request method: {request_method.upper()}")
+        logger.debug(f"Request body: {request_body}")
 
         # Resolve the method by name
         request_func = getattr(self.requests_wrapper, f"a{request_method}")
 
-        if request_method in ("get", "delete"):
+        if request_method in ("get", "delete", "head"):
             api_response = await request_func(api_url)
-        elif request_method in ("post", "put", "patch"):
-            api_response = await request_func(api_url, json.loads(request_body))
         else:
-            raise ValueError(
-                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
-            )
-        await run_manager.on_text(
-            str(api_response), color="yellow", end="\n", verbose=self.verbose
-        )
+            api_response = await request_func(api_url, json.loads(request_body))
 
         answer = await self.api_answer_chain.apredict(
             question=question,
@@ -169,7 +155,7 @@ class PowerfulAPIChain(APIChain):
     ) -> 'PowerfulAPIChain':
         """Load chain from just an LLM and the api docs."""
         get_request_chain = LLMChain(llm=llm, prompt=api_url_prompt)
-        requests_wrapper = PowerfulRequestsWrapper(headers=headers)
+        requests_wrapper = TextRequestsWrapper(headers=headers)
         get_answer_chain = LLMChain(llm=llm, prompt=api_response_prompt)
         return cls(
             api_request_chain=get_request_chain,
@@ -179,6 +165,3 @@ class PowerfulAPIChain(APIChain):
             **kwargs,
         )
 
-    @property
-    def _chain_type(self) -> str:
-        return "powerful_api_chain"
