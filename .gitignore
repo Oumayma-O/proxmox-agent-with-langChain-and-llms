@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .DS_STORE
+.agent-scripts/api_chain/proxmox_api_chain.ipynb
 *.env
 db/
 env/
