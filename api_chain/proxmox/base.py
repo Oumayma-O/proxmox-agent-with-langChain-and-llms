@@ -15,7 +15,8 @@ from langchain_core.callbacks import (
     CallbackManagerForChainRun,
 )
 
-from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
+from langchain.prompts import BasePromptTemplate
+from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
 from proxmox.docs import proxmox_api_docs
 from proxmox.utils import _validate_headers
@@ -31,7 +32,7 @@ class ProxmoxAPIChain(APIChain):
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
     pve_token: str
     api_docs: str  = ""
-    retriever = VectorStoreRetriever
+    retriever: VectorStoreRetriever
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
@@ -43,14 +44,34 @@ class ProxmoxAPIChain(APIChain):
         question = inputs[self.question_key]
 
         retrieved_docs = self.retriever.get_relevant_documents(query=question)
+        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
-        all_retrieved_content = "\n".join(doc.page_content for doc in retrieved_docs)
+        # Log retrieved documents for debugging
+        if self.verbose:
+            for i, doc in enumerate(retrieved_docs):
+                print(f"Retrieved Document {i}: {doc.page_content}")
+
+        # Define a function to score each document based on relevance to the user query
+        def score_document(doc, query):
+            score = 0
+            for keyword in query.split():
+                if keyword.lower() in doc.page_content.lower():
+                    score += 1
+            return score
+
+        # Score and select the most relevant document
+        scored_docs = sorted(retrieved_docs, key=lambda doc: score_document(doc, question), reverse=True)
+        relevant_doc = scored_docs[0]
+
+        if self.verbose:
+            print(f'Selected Document: {relevant_doc.page_content}')
 
         request_info = self.api_request_chain.predict(
             question=question,
-            api_docs=all_retrieved_content,
+            api_docs=relevant_doc.page_content,
             callbacks=_run_manager.get_child()
         )
+        
         if self.verbose:
             print(f'Request info: {request_info}')
 
@@ -94,7 +115,7 @@ class ProxmoxAPIChain(APIChain):
 
         answer = self.api_answer_chain.predict(
             question=question,
-            api_docs=all_retrieved_content,
+            api_docs=context,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
@@ -109,11 +130,11 @@ class ProxmoxAPIChain(APIChain):
 
         retrieved_docs = self.retriever.get_relevant_documents(query=question)
 
-        all_retrieved_content = "\n".join(doc.page_content for doc in retrieved_docs)
+        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
         request_info = await self.api_request_chain.apredict(
             question=question,
-            api_docs=all_retrieved_content,
+            api_docs=context,
             callbacks=_run_manager.get_child()
         )
         if self.verbose:
@@ -159,7 +180,7 @@ class ProxmoxAPIChain(APIChain):
 
         answer = await self.api_answer_chain.apredict(
             question=question,
-            api_docs=all_retrieved_content,
+            api_docs=context,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
@@ -170,8 +191,8 @@ class ProxmoxAPIChain(APIChain):
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
+        retriever : VectorStoreRetriever,
         api_docs: str = proxmox_api_docs,
-        retriever = VectorStoreRetriever,
         pve_token: Optional[str] = "",
         headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
@@ -187,8 +208,8 @@ class ProxmoxAPIChain(APIChain):
             api_request_chain=get_request_chain,
             api_answer_chain=get_answer_chain,
             requests_wrapper=requests_wrapper,
+            retriever=retriever,
             api_docs=api_docs,
-            retriever = VectorStoreRetriever,
             pve_token=pve_token,  # Ensure pve_token is passed here
             **kwargs,
         )
