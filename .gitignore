@@ -1,3 +1,12 @@
 __pycache__/
 *.py[cod]
 .DS_STORE
+*.env
+db/
+env/
+venv/
+*.db
+*.sqlite
+*.exe
+*.zip
+*.gz

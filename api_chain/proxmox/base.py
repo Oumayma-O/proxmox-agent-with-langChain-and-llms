@@ -1,19 +1,11 @@
 import json
 from langchain_core.vectorstores import VectorStoreRetriever
 from typing import Any, Dict, Optional, Sequence, Tuple
-from pydantic import Field
+from langchain_core.pydantic_v1 import Field, root_validator
 
-from langchain.chains import APIChain
-from langchain.chains.api.base import (
-    _check_in_allowed_domain,
-)
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
-from langchain_core.callbacks import (
-    AsyncCallbackManagerForChainRun,
-    CallbackManagerForChainRun,
-)
 
 from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
@@ -25,7 +17,7 @@ SUPPORTED_HTTP_METHODS: Tuple[str] = (
 )
 
 
-class ProxmoxAPIChain(APIChain):
+class ProxmoxAPIChain(PowerfulAPIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
@@ -132,26 +124,10 @@ class ProxmoxAPIChain(APIChain):
             api_url, self.limit_to_domains
         ):
             raise ValueError(
-                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
-            )
-        request_method = request_method.strip().lower().replace('|', '')
-        request_body = request_body.strip().replace('|', '')
-
-        if self.verbose:
-            print(f"API URL: {api_url}")
-            print(f"Request method: {request_method.upper()}")
-            print(f"Request body: {request_body}")
-
-        # Resolve the method by name
-        request_func = getattr(self.requests_wrapper, f"a{request_method}")
-
-        if request_method in ("get", "delete"):
-            api_response = await request_func(api_url)
-        elif request_method in ("post", "put", "patch"):
-            api_response = await request_func(api_url, json.loads(request_body))
-        else:
-            raise ValueError(
-                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
+                "Can't proceed without authorization. Consider one of the following:\n"
+                "- Set 'PVE_TOKEN' environment variable.\n"
+                "- Set 'pve_token' attribute.\n"
+                "- Pass valid Authorization token in headers."
             )
         await run_manager.on_text(
             str(api_response), color="yellow", end="\n", verbose=self.verbose
