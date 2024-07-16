@@ -1,6 +1,6 @@
 import json
 from typing import Any, Dict, Optional, Sequence, Tuple
-from pydantic import Field
+from langchain_core.pydantic_v1 import Field
 
 from langchain.chains import APIChain
 from langchain.chains.api.base import (
@@ -39,21 +39,22 @@ class PowerfulAPIChain(APIChain):
               run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
-        request_info = self.api_request_chain.predict(
-            question=question,
-            api_docs=self.api_docs,
+        request_info = self.api_request_chain.invoke(
+            {
+                "question": question,
+                "api_docs": self.api_docs,
+            },
             callbacks=_run_manager.get_child()
-        )
+        )['text']
         if self.verbose:
-            print(f'Request info: {request_info}')
+            print(f"\nRequest info: {request_info}")
 
-        try:
-            api_url, request_method, request_body = request_info.split('|', 2)
-        except ValueError as e:
-            return {
-                self.output_key: "",
-                "error": f"Output parse error: {str(e)}"
-            }
+        request_info_list = request_info.split('|')
+
+        if len(request_info_list) < 3:
+            raise ValueError("Request info parse error")
+
+        api_url, request_method, request_body = request_info_list[:3]
 
         api_url = api_url.strip().replace('|', '')
         if self.limit_to_domains and not _check_in_allowed_domain(
@@ -85,13 +86,15 @@ class PowerfulAPIChain(APIChain):
             str(api_response), color="yellow", end="\n", verbose=self.verbose
         )
 
-        answer = self.api_answer_chain.predict(
-            question=question,
-            api_docs=self.api_docs,
-            api_url=api_url,
-            api_response=api_response,
+        answer = self.api_answer_chain.invoke(
+            {
+                "question": question,
+                "api_docs": self.api_docs,
+                "api_url": api_url,
+                "api_response": api_response,
+            },
             callbacks=_run_manager.get_child()
-        )
+        )['text']
         return {self.output_key: answer}
 
     async def _acall(self,

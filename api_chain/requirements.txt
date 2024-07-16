@@ -2,4 +2,11 @@ langchain==0.2.6
 langchain-community==0.2.5
 langchain-core==0.2.10
 langchain-google-genai
+langchain-huggingface
+langchain-chroma
 ipykernel
+ipywidgets
+widgetsnbextension
+pandas-profiling
+jupyter
+hvac

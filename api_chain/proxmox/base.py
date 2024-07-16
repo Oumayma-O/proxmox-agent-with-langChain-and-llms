@@ -1,21 +1,14 @@
-import json
+import os
 from typing import Any, Dict, Optional, Sequence, Tuple
-from pydantic import Field
+from langchain_core.pydantic_v1 import Field, root_validator
 
-from langchain.chains import APIChain
-from langchain.chains.api.base import (
-    _check_in_allowed_domain,
-)
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
-from langchain_core.callbacks import (
-    AsyncCallbackManagerForChainRun,
-    CallbackManagerForChainRun,
-)
 
 from api_chain.core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from api_chain.core.requests import PowerfulRequestsWrapper
+from api_chain.core.powerfulchain import PowerfulAPIChain
 from proxmox.docs import proxmox_api_docs
 from proxmox.utils import _validate_headers
 
@@ -24,7 +17,7 @@ SUPPORTED_HTTP_METHODS: Tuple[str] = (
 )
 
 
-class ProxmoxAPIChain(APIChain):
+class ProxmoxAPIChain(PowerfulAPIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
@@ -34,125 +27,22 @@ class ProxmoxAPIChain(APIChain):
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
 
-    def _call(self,
-              inputs: Dict[str, str],
-              run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
-        _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
-        question = inputs[self.question_key]
-        request_info = self.api_request_chain.predict(
-            question=question,
-            api_docs=self.api_docs,
-            callbacks=_run_manager.get_child()
-        )
-        if self.verbose:
-            print(f'Request info: {request_info}')
-
-        try:
-            api_url, request_method, request_body = request_info.split('|', 2)
-        except ValueError as e:
-            return {
-                self.output_key: "",
-                "error": f"Output parse error: {str(e)}"
-            }
-
-        api_url = api_url.strip().replace('|', '')
-        if self.limit_to_domains and not _check_in_allowed_domain(
-            api_url, self.limit_to_domains
+    @root_validator(pre=True)
+    def validate_headers_authorization(cls, values: Dict) -> Dict:
+        """Check that headers contains Authorization."""
+        headers: Dict[str, Any] = values["requests_wrapper"].headers
+        if (
+            not "PVE_TOKEN" in os.environ
+            and not values["pve_token"]
+            and (not headers or 'Authorization' not in headers)
         ):
             raise ValueError(
-                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
+                "Can't proceed without authorization. Consider one of the following:\n"
+                "- Set 'PVE_TOKEN' environment variable.\n"
+                "- Set 'pve_token' attribute.\n"
+                "- Pass valid Authorization token in headers."
             )
-        request_method = request_method.strip().lower().replace('|', '')
-        request_body = request_body.strip().replace('|', '')
-
-        if self.verbose:
-            print(f"API URL: {api_url}")
-            print(f"Request method: {request_method.upper()}")
-            print(f"Request body: {request_body}")
-
-        # Resolve the method by name
-        request_func = getattr(self.requests_wrapper, request_method)
-
-        if request_method in ("get", "delete"):
-            api_response = request_func(api_url)
-        elif request_method in ("post", "put", "patch"):
-            api_response = request_func(api_url, json.loads(request_body))
-        else:
-            raise ValueError(
-                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
-            )
-        run_manager.on_text(
-            str(api_response), color="yellow", end="\n", verbose=self.verbose
-        )
-
-        answer = self.api_answer_chain.predict(
-            question=question,
-            api_docs=self.api_docs,
-            api_url=api_url,
-            api_response=api_response,
-            callbacks=_run_manager.get_child()
-        )
-        return {self.output_key: answer}
-
-    async def _acall(self,
-                     inputs: Dict[str, str],
-                     run_manager: Optional[AsyncCallbackManagerForChainRun] = None) -> Dict[str, str]:
-        _run_manager = run_manager or AsyncCallbackManagerForChainRun.get_noop_manager()
-        question = inputs[self.question_key]
-        request_info = await self.api_request_chain.apredict(
-            question=question,
-            api_docs=self.api_docs,
-            callbacks=_run_manager.get_child()
-        )
-        if self.verbose:
-            print(f'Request info: {request_info}')
-
-        try:
-            api_url, request_method, request_body = request_info.split('|', 2)
-        except ValueError as e:
-            return {
-                self.output_key: "",
-                "error": f"Output parse error: {str(e)}"
-            }
-
-        api_url = api_url.strip().replace('|', '')
-        if self.limit_to_domains and not _check_in_allowed_domain(
-            api_url, self.limit_to_domains
-        ):
-            raise ValueError(
-                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
-            )
-        request_method = request_method.strip().lower().replace('|', '')
-        request_body = request_body.strip().replace('|', '')
-
-        if self.verbose:
-            print(f"API URL: {api_url}")
-            print(f"Request method: {request_method.upper()}")
-            print(f"Request body: {request_body}")
-
-        # Resolve the method by name
-        request_func = getattr(self.requests_wrapper, f"a{request_method}")
-
-        if request_method in ("get", "delete"):
-            api_response = await request_func(api_url)
-        elif request_method in ("post", "put", "patch"):
-            api_response = await request_func(api_url, json.loads(request_body))
-        else:
-            raise ValueError(
-                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
-            )
-        await run_manager.on_text(
-            str(api_response), color="yellow", end="\n", verbose=self.verbose
-        )
-
-        answer = await self.api_answer_chain.apredict(
-            question=question,
-            api_docs=self.api_docs,
-            api_url=api_url,
-            api_response=api_response,
-            callbacks=_run_manager.get_child()
-        )
-        return {self.output_key: answer}
+        return values
 
     @classmethod
     def from_llm_and_api_docs(
