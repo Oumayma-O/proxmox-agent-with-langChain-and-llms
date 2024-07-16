@@ -1,5 +1,7 @@
-from typing import Iterable, Optional, List
+from typing import Iterable, Optional, List, Dict, Any
 from langchain_core.documents import Document
+from langchain_core.vectorstores import VectorStoreRetriever
+from langchain_core.runnables import RunnablePassthrough
 
 
 def _format_docs(docs: List[Document]) -> str:
@@ -18,3 +20,9 @@ def _postprocess_text(
         for char in remove_chars:
             text = text.replace(char, "")
     return text.strip()
+
+
+def _context_runnable(api_docs: str, retriever: VectorStoreRetriever) -> Dict[str, Any]:
+    if api_docs:
+        return {"api_docs": RunnablePassthrough()}
+    return {"api_docs": retriever | _format_docs}
