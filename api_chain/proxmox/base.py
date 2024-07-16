@@ -1,4 +1,5 @@
-import os
+import json
+from langchain_core.vectorstores import VectorStoreRetriever
 from typing import Any, Dict, Optional, Sequence, Tuple
 from langchain_core.pydantic_v1 import Field, root_validator
 
@@ -6,9 +7,8 @@ from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
 
-from api_chain.core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
-from api_chain.core.requests import PowerfulRequestsWrapper
-from api_chain.core.powerfulchain import PowerfulAPIChain
+from core.templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
+from core.requests import PowerfulRequestsWrapper
 from proxmox.docs import proxmox_api_docs
 from proxmox.utils import _validate_headers
 
@@ -22,19 +22,106 @@ class ProxmoxAPIChain(PowerfulAPIChain):
     api_answer_chain: LLMChain
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
     pve_token: str
-    api_docs: str
+    api_docs: str  = ""
+    retriever = VectorStoreRetriever
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
 
-    @root_validator(pre=True)
-    def validate_headers_authorization(cls, values: Dict) -> Dict:
-        """Check that headers contains Authorization."""
-        headers: Dict[str, Any] = values["requests_wrapper"].headers
-        if (
-            not "PVE_TOKEN" in os.environ
-            and not values["pve_token"]
-            and (not headers or 'Authorization' not in headers)
+    def _call(self,
+              inputs: Dict[str, str],
+              run_manager: Optional[CallbackManagerForChainRun] = None) -> Dict[str, str]:
+        _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
+        question = inputs[self.question_key]
+
+        retrieved_docs = self.retriever.get_relevant_documents(query=question)
+
+        all_retrieved_content = "\n".join(doc.page_content for doc in retrieved_docs)
+
+        request_info = self.api_request_chain.predict(
+            question=question,
+            api_docs=all_retrieved_content,
+            callbacks=_run_manager.get_child()
+        )
+        if self.verbose:
+            print(f'Request info: {request_info}')
+
+        try:
+            api_url, request_method, request_body = request_info.split('|', 2)
+        except ValueError as e:
+            return {
+                self.output_key: "",
+                "error": f"Output parse error: {str(e)}"
+            }
+
+        api_url = api_url.strip().replace('|', '')
+        if self.limit_to_domains and not _check_in_allowed_domain(
+            api_url, self.limit_to_domains
+        ):
+            raise ValueError(
+                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
+            )
+        request_method = request_method.strip().lower().replace('|', '')
+        request_body = request_body.strip().replace('|', '')
+
+        if self.verbose:
+            print(f"API URL: {api_url}")
+            print(f"Request method: {request_method.upper()}")
+            print(f"Request body: {request_body}")
+
+        # Resolve the method by name
+        request_func = getattr(self.requests_wrapper, request_method)
+
+        if request_method in ("get", "delete"):
+            api_response = request_func(api_url)
+        elif request_method in ("post", "put", "patch"):
+            api_response = request_func(api_url, json.loads(request_body))
+        else:
+            raise ValueError(
+                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
+            )
+        run_manager.on_text(
+            str(api_response), color="yellow", end="\n", verbose=self.verbose
+        )
+
+        answer = self.api_answer_chain.predict(
+            question=question,
+            api_docs=all_retrieved_content,
+            api_url=api_url,
+            api_response=api_response,
+            callbacks=_run_manager.get_child()
+        )
+        return {self.output_key: answer}
+
+    async def _acall(self,
+                     inputs: Dict[str, str],
+                     run_manager: Optional[AsyncCallbackManagerForChainRun] = None) -> Dict[str, str]:
+        _run_manager = run_manager or AsyncCallbackManagerForChainRun.get_noop_manager()
+        question = inputs[self.question_key]
+
+        retrieved_docs = self.retriever.get_relevant_documents(query=question)
+
+        all_retrieved_content = "\n".join(doc.page_content for doc in retrieved_docs)
+
+        request_info = await self.api_request_chain.apredict(
+            question=question,
+            api_docs=all_retrieved_content,
+            callbacks=_run_manager.get_child()
+        )
+        if self.verbose:
+            print(f'Request info: {request_info}')
+
+        try:
+            api_url, request_method, request_body = request_info.split('|', 2)
+        except ValueError as e:
+            return {
+                self.output_key: "",
+                "error": f"Output parse error: {str(e)}"
+            }
+
+        api_url = api_url.strip().replace('|', '')
+        if self.limit_to_domains and not _check_in_allowed_domain(
+            api_url, self.limit_to_domains
         ):
             raise ValueError(
                 "Can't proceed without authorization. Consider one of the following:\n"
@@ -42,14 +129,26 @@ class ProxmoxAPIChain(PowerfulAPIChain):
                 "- Set 'pve_token' attribute.\n"
                 "- Pass valid Authorization token in headers."
             )
-        return values
+        await run_manager.on_text(
+            str(api_response), color="yellow", end="\n", verbose=self.verbose
+        )
+
+        answer = await self.api_answer_chain.apredict(
+            question=question,
+            api_docs=all_retrieved_content,
+            api_url=api_url,
+            api_response=api_response,
+            callbacks=_run_manager.get_child()
+        )
+        return {self.output_key: answer}
 
     @classmethod
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
         api_docs: str = proxmox_api_docs,
-        pve_token: Optional[str] = None,
+        retriever = VectorStoreRetriever,
+        pve_token: Optional[str] = "",
         headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
@@ -65,6 +164,8 @@ class ProxmoxAPIChain(PowerfulAPIChain):
             api_answer_chain=get_answer_chain,
             requests_wrapper=requests_wrapper,
             api_docs=api_docs,
+            retriever = VectorStoreRetriever,
+            pve_token=pve_token,  # Ensure pve_token is passed here
             **kwargs,
         )
 
