@@ -21,6 +21,8 @@ from sklearn import base
 from proxmox.models import APIRequest
 from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
+from sentence_transformers import SentenceTransformer, util
+import numpy as np
 from proxmox.docs import proxmox_api_docs
 from proxmox.utils import _validate_URL, _validate_headers
 from langchain.retrievers import ContextualCompressionRetriever
