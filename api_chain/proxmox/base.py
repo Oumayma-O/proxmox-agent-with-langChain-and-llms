@@ -72,6 +72,7 @@ class ProxmoxAPIChain(APIChain):
             callbacks=_run_manager.get_child()
         )
         
+        
         if self.verbose:
             print(f'Request info: {request_info}')
 
@@ -116,6 +117,7 @@ class ProxmoxAPIChain(APIChain):
         answer = self.api_answer_chain.predict(
             question=question,
             api_docs=context,
+            api_docs=context,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
@@ -131,9 +133,11 @@ class ProxmoxAPIChain(APIChain):
         retrieved_docs = self.retriever.get_relevant_documents(query=question)
 
         context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
         request_info = await self.api_request_chain.apredict(
             question=question,
+            api_docs=context,
             api_docs=context,
             callbacks=_run_manager.get_child()
         )
@@ -181,6 +185,7 @@ class ProxmoxAPIChain(APIChain):
         answer = await self.api_answer_chain.apredict(
             question=question,
             api_docs=context,
+            api_docs=context,
             api_url=api_url,
             api_response=api_response,
             callbacks=_run_manager.get_child()
@@ -209,7 +214,9 @@ class ProxmoxAPIChain(APIChain):
             api_answer_chain=get_answer_chain,
             requests_wrapper=requests_wrapper,
             retriever=retriever,
+            retriever=retriever,
             api_docs=api_docs,
+            pve_token=pve_token,  # Ensure pve_token is passed here
             pve_token=pve_token,  
             **kwargs,
         )
