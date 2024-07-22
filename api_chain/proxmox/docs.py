@@ -24,7 +24,7 @@ _proxmox_api_docs= [
         "endpoint": "/api2/json/nodes/{node}/qemu",
         "method": "post",
         "summary": "Create a Virtual machine (VM) ",
-        "description": "Use this endpoint to create a new virtual machine on the specified node. This endpoint is used for initial creation and allocation of resources such as memory, cores, and storage.",
+        "description": "Use this endpoint to create a new virtual machine on the specified node. This endpoint is used for initial creation and can be used for the allocation of resources such as memory, cores, and storage.",
         "parameters": [
             {
                 "name": "node",
@@ -83,6 +83,7 @@ _proxmox_api_docs= [
         'endpoint': '/api2/json/nodes/{node}/qemu/{vmid}',
         'method': 'delete',
         'summary': 'Delete Virtual machine (VM)',
+        'description' : 'Deleting a Virtual machine from a node .',
         'parameters': [
                     {
                         'name': 'node',
@@ -142,9 +143,89 @@ _proxmox_api_docs= [
     {
         "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/qemu/{vmid}/config",
+        "method": "post",
+        "summary": "Set initial configuration options of a Virtual machine",
+        "description": "Use this endpoint to set the initial configuration of a new virtual machine. This is useful when you need to define settings such as memory, cores, CPU type, and other parameters for a VM that is being created.",
+        "parameters": [
+            {
+                "name": "node",
+                "in": "path",
+                "required": True,
+                "description": "The cluster node name",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            {
+                "name": "vmid",
+                "in": "path",
+                "required": True,
+                "description": "The (unique) ID of the VM",
+                "schema": {
+                    "type": "integer",
+                    "minimum": 100,
+                    "maximum": 999999999
+                }
+            }
+        ],
+        "requestBody": {
+            "required": True,
+            "content": {
+                "application/json": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "memory": {
+                                "type": "integer",
+                                "description": "Amount of RAM for the VM in MiB",
+                                "minimum": 16
+                            },
+                            "cores": {
+                                "type": "integer",
+                                "description": "Number of cores per socket",
+                                "minimum": 1
+                            },
+                            "cpu": {
+                                "type": "string",
+                                "description": "Emulated CPU type"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Set a name for the VM"
+                            },
+                            "net": {
+                                "type": "string",
+                                "description": "Specify network devices"
+                            },
+                            "ostype": {
+                                "type": "string",
+                                "description": "Specify guest operating system",
+                                "enum": [
+                                    "other", "wxp", "w2k", "w2k3", "w2k8", "wvista", "win7", "win8",
+                                    "win10", "win11", "l24", "l26", "solaris", "opensolaris", "netbsd",
+                                    "freebsd", "openbsd"
+                                ]
+                            },
+                            "disk": {
+                                "type": "string",
+                                "description": "Specify disk size and type, e.g., 'size=10G,ssd=1'"
+                            },
+                            "boot": {
+                                "type": "string",
+                                "description": "Specify guest boot order, e.g., 'order=cdrom;ide0'"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    {
+        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
+        "endpoint": "/api2/json/nodes/{node}/qemu/{vmid}/config",
         "method": "put",
         "summary": "Update virtual machine configuration options",
-        "description": "Use this endpoint to update the configuration of an existing virtual machine. This is useful when you need to change settings such as memory, cores, network devices, and other VM parameters for an already running or stopped VM.",
+        "description": "Use this endpoint to modify the configuration of an existing virtual machine. This is useful when you need to change settings such as memory, cores, network devices, and other VM parameters for an already running or stopped VM.",
         "parameters": [
             {
                 "name": "node",
@@ -206,6 +287,26 @@ _proxmox_api_docs= [
                             "sockets": {
                                 "type": "integer",
                                 "description": "The number of CPU sockets."
+                            },
+                            "cpu": {
+                                "type": "string",
+                                "description": "Emulated CPU type. Format: [[cputype=]<string>] [,flags=<+FLAG[;-FLAG...]>] [,hidden=<1|0>] [,hv-vendor-id=<vendor-id>] [,phys-bits=<8-64|host>] [,reported-model=<enum>]"
+                            },
+                            "cpulimit": {
+                                "type": "number",
+                                "description": "Limit of CPU usage. Value '0' indicates no CPU limit."
+                            },
+                            "cpuunits": {
+                                "type": "integer",
+                                "description": "CPU weight for a VM. The larger the number, the more CPU time this VM gets. Range: 1 - 262144."
+                            },
+                            "ostype": {
+                                "type": "string",
+                                "enum": [
+                                    "other", "wxp", "w2k", "w2k3", "w2k8", "wvista", "win7", "win8", "win10", "win11",
+                                    "l24", "l26", "solaris"
+                                ],
+                                "description": "Specify guest operating system to enable specific optimizations/features."
                             }
                         }
                     }
@@ -218,8 +319,9 @@ _proxmox_api_docs= [
         "endpoint": "/api2/json/nodes/{node}/lxc",
         "methods": "get",
         "summary": "List LXC Containers on a Node",
+        "description": "List all containers available on a node",
         "parameters": [
-                    {
+                    { 
                         "name": "node",
                         "in": "path",
                         "required": True,
@@ -291,11 +393,12 @@ _proxmox_api_docs= [
             }
         
 },
-{
+    {
             'base_url': 'https://ns31418912.ip-54-38-37.eu:8006/',
             'endpoint': '/api2/json/nodes/{node}/lxc/{vmid}',
             'methods': 'delete',
             'summary': 'Delete LXC Container',
+            'description' : 'Deleting a container from a node .',
             'parameters': [
                         {
                             'name': 'node',
@@ -316,80 +419,81 @@ _proxmox_api_docs= [
                             }
                         }
                     ]
-},{
-    "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
-    "endpoint": "/api2/json/nodes/{node}/lxc/{vmid}/config",
-    "method": "put",
-    "summary": "Set container configuration (config file)",
-    "description": "Modify the configuration of an LXC container identified by {vmid} on the specified {node}.",
-    "parameters": [
-        {
-            "name": "node",
-            "in": "path",
-            "required": True,
-            "description": "The cluster node name",
-            "schema": {
-                "type": "string"
+    },
+    {
+        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
+        "endpoint": "/api2/json/nodes/{node}/lxc/{vmid}/config",
+        "method": "put",
+        "summary": "Set container configuration (config file)",
+        "description": "Modify or set the configuration of an LXC container identified by {vmid} on the specified {node}.",
+        "parameters": [
+            {
+                "name": "node",
+                "in": "path",
+                "required": True,
+                "description": "The cluster node name",
+                "schema": {
+                    "type": "string"
+                }
+            },
+            {
+                "name": "vmid",
+                "in": "path",
+                "required": True,
+                "description": "The (unique) ID of the VM",
+                "schema": {
+                    "type": "integer"
+                }
             }
-        },
-        {
-            "name": "vmid",
-            "in": "path",
-            "required": True,
-            "description": "The (unique) ID of the VM",
-            "schema": {
-                "type": "integer"
-            }
-        }
-    ],
-    "requestBody": {
-    "required": True,
-    "content": {
-        "application/json": {
-            "schema": {
-                "type": "object",
-                "properties": {
-                    "arch": { "type": "string", "enum": ["amd64", "i386", "arm64", "armhf", "riscv32", "riscv64"], "description": "OS architecture type" },
-                    "cmode": { "type": "string", "enum": ["shell", "console", "tty"], "description": "Console mode" },
-                    "console": { "type": "boolean", "description": "Attach a console device (/dev/console) to the container" },
-                    "cores": { "type": "integer", "description": "The number of cores assigned to the container" },
-                    "cpulimit": { "type": "number", "description": "Limit of CPU usage" },
-                    "cpuunits": { "type": "integer", "description": "CPU weight for a container" },
-                    "debug": { "type": "boolean", "description": "Try to be more verbose" },
-                    "delete": { "type": "string", "description": "A list of settings you want to delete" },
-                    "description": { "type": "string", "description": "Description for the Container" },
-                    "dev[n]": { "type": "string", "description": "Device to pass through to the container" },
-                    "digest": { "type": "string", "description": "Prevent changes if current configuration file has different SHA1 digest" },
-                    "features": { "type": "string", "description": "Allow containers access to advanced features" },
-                    "hookscript": { "type": "string", "description": "Script that will be executed during various steps in the container's lifetime" },
-                    "hostname": { "type": "string", "description": "Set a host name for the container" },
-                    "lock": { "type": "string", "enum": ["backup", "create", "destroyed", "disk", "fstrim", "migrate", "mounted", "rollback", "snapshot", "snapshot-delete"], "description": "Lock/unlock the container" },
-                    "memory": { "type": "integer", "description": "Amount of RAM for the container in MB" },
-                    "mp[n]": { "type": "string", "description": "Use volume as container mount point" },
-                    "nameserver": { "type": "string", "description": "Sets DNS server IP address for a container" },
-                    "net[n]": { "type": "string", "description": "Specifies network interfaces for the container" },
-                    "onboot": { "type": "boolean", "description": "Specifies whether a container will be started during system bootup" },
-                    "ostype": { "type": "string", "enum": ["debian", "devuan", "ubuntu", "centos", "fedora", "opensuse", "archlinux", "alpine", "gentoo", "nixos", "unmanaged"], "description": "OS type" },
-                    "protection": { "type": "boolean", "description": "Sets the protection flag of the container" },
-                    "revert": { "type": "string", "description": "Revert a pending change" },
-                    "rootfs": { "type": "string", "description": "Use volume as container root" },
-                    "searchdomain": { "type": "string", "description": "Sets DNS search domains for a container" },
-                    "startup": { "type": "string", "description": "Startup and shutdown behavior" },
-                    "swap": { "type": "integer", "description": "Amount of SWAP for the container in MB" },
-                    "tags": { "type": "string", "description": "Tags of the Container" },
-                    "template": { "type": "boolean", "description": "Enable/disable Template" },
-                    "timezone": { "type": "string", "description": "Time zone to use in the container" },
-                    "tty": { "type": "integer", "description": "Specify the number of tty available to the container" },
-                    "unprivileged": { "type": "boolean", "description": "Makes the container run as unprivileged user" },
-                    "unused[n]": { "type": "string", "description": "Reference to unused volumes" }
+        ],
+        "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "arch": { "type": "string", "enum": ["amd64", "i386", "arm64", "armhf", "riscv32", "riscv64"], "description": "OS architecture type" },
+                        "cmode": { "type": "string", "enum": ["shell", "console", "tty"], "description": "Console mode" },
+                        "console": { "type": "boolean", "description": "Attach a console device (/dev/console) to the container" },
+                        "cores": { "type": "integer", "description": "The number of cores assigned to the container" },
+                        "cpulimit": { "type": "number", "description": "Limit of CPU usage" },
+                        "cpuunits": { "type": "integer", "description": "CPU weight for a container" },
+                        "debug": { "type": "boolean", "description": "Try to be more verbose" },
+                        "delete": { "type": "string", "description": "A list of settings you want to delete" },
+                        "description": { "type": "string", "description": "Description for the Container" },
+                        "dev[n]": { "type": "string", "description": "Device to pass through to the container" },
+                        "digest": { "type": "string", "description": "Prevent changes if current configuration file has different SHA1 digest" },
+                        "features": { "type": "string", "description": "Allow containers access to advanced features" },
+                        "hookscript": { "type": "string", "description": "Script that will be executed during various steps in the container's lifetime" },
+                        "hostname": { "type": "string", "description": "Set a host name for the container" },
+                        "lock": { "type": "string", "enum": ["backup", "create", "destroyed", "disk", "fstrim", "migrate", "mounted", "rollback", "snapshot", "snapshot-delete"], "description": "Lock/unlock the container" },
+                        "memory": { "type": "integer", "description": "Amount of RAM for the container in MB" },
+                        "mp[n]": { "type": "string", "description": "Use volume as container mount point" },
+                        "nameserver": { "type": "string", "description": "Sets DNS server IP address for a container" },
+                        "net[n]": { "type": "string", "description": "Specifies network interfaces for the container" },
+                        "onboot": { "type": "boolean", "description": "Specifies whether a container will be started during system bootup" },
+                        "ostype": { "type": "string", "enum": ["debian", "devuan", "ubuntu", "centos", "fedora", "opensuse", "archlinux", "alpine", "gentoo", "nixos", "unmanaged"], "description": "OS type" },
+                        "protection": { "type": "boolean", "description": "Sets the protection flag of the container" },
+                        "revert": { "type": "string", "description": "Revert a pending change" },
+                        "rootfs": { "type": "string", "description": "Use volume as container root" },
+                        "searchdomain": { "type": "string", "description": "Sets DNS search domains for a container" },
+                        "startup": { "type": "string", "description": "Startup and shutdown behavior" },
+                        "swap": { "type": "integer", "description": "Amount of SWAP for the container in MB" },
+                        "tags": { "type": "string", "description": "Tags of the Container" },
+                        "template": { "type": "boolean", "description": "Enable/disable Template" },
+                        "timezone": { "type": "string", "description": "Time zone to use in the container" },
+                        "tty": { "type": "integer", "description": "Specify the number of tty available to the container" },
+                        "unprivileged": { "type": "boolean", "description": "Makes the container run as unprivileged user" },
+                        "unused[n]": { "type": "string", "description": "Reference to unused volumes" }
+                    }
                 }
             }
         }
     }
-}
-},
+    },
 
-{
+   {
     "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
     "endpoint": "/api2/json/nodes/{node}/lxc/{vmid}/config",
     "method": "get",
