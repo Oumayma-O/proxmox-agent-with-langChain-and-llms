@@ -1,20 +1,20 @@
 import json
 from langchain_core.vectorstores import VectorStoreRetriever
 from typing import Any, Dict, Optional, Sequence, Tuple
-from langchain_core.pydantic_v1 import Field, root_validator
+from pydantic import Field
 
+from langchain.chains import APIChain
+from langchain.chains.api.base import (
+    _check_in_allowed_domain,
+)
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
-<<<<<<< HEAD
-
-=======
 from langchain_core.callbacks import (
     AsyncCallbackManagerForChainRun,
     CallbackManagerForChainRun,
 )
 from langchain_core.documents.base import Document
->>>>>>> 1008f04 (Migrating to surrealdb)
 from langchain.prompts import BasePromptTemplate
 from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
@@ -32,7 +32,7 @@ SUPPORTED_HTTP_METHODS: Tuple[str] = (
 )
 
 
-class ProxmoxAPIChain(PowerfulAPIChain):
+class ProxmoxAPIChain(APIChain):
     api_request_chain: LLMChain
     api_answer_chain: LLMChain
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
@@ -153,10 +153,26 @@ class ProxmoxAPIChain(PowerfulAPIChain):
             api_url, self.limit_to_domains
         ):
             raise ValueError(
-                "Can't proceed without authorization. Consider one of the following:\n"
-                "- Set 'PVE_TOKEN' environment variable.\n"
-                "- Set 'pve_token' attribute.\n"
-                "- Pass valid Authorization token in headers."
+                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
+            )
+        request_method = request_method.strip().lower().replace('|', '')
+        request_body = request_body.strip().replace('|', '')
+
+        if self.verbose:
+            print(f"API URL: {api_url}")
+            print(f"Request method: {request_method.upper()}")
+            print(f"Request body: {request_body}")
+
+        # Resolve the method by name
+        request_func = getattr(self.requests_wrapper, f"a{request_method}")
+
+        if request_method in ("get", "delete"):
+            api_response = await request_func(api_url)
+        elif request_method in ("post", "put", "patch"):
+            api_response = await request_func(api_url, json.loads(request_body))
+        else:
+            raise ValueError(
+                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
             )
         await run_manager.on_text(
             str(api_response), color="yellow", end="\n", verbose=self.verbose
@@ -194,7 +210,7 @@ class ProxmoxAPIChain(PowerfulAPIChain):
             requests_wrapper=requests_wrapper,
             retriever=retriever,
             api_docs=api_docs,
-            pve_token=pve_token,  # Ensure pve_token is passed here
+            pve_token=pve_token,  
             **kwargs,
         )
 
