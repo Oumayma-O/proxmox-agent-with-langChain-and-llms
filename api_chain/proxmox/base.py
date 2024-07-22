@@ -6,12 +6,26 @@ from langchain_core.pydantic_v1 import Field, root_validator
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
+<<<<<<< HEAD
 
+=======
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForChainRun,
+    CallbackManagerForChainRun,
+)
+from langchain_core.documents.base import Document
+>>>>>>> 1008f04 (Migrating to surrealdb)
 from langchain.prompts import BasePromptTemplate
 from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
+from sentence_transformers import SentenceTransformer, util
+import numpy as np
 from proxmox.docs import proxmox_api_docs
 from proxmox.utils import _validate_headers
+from langchain.retrievers.multi_query import MultiQueryRetriever
+from langchain.retrievers import ContextualCompressionRetriever
+
+
 
 SUPPORTED_HTTP_METHODS: Tuple[str] = (
     "get", "post", "put", "patch", "delete"
@@ -24,7 +38,7 @@ class ProxmoxAPIChain(PowerfulAPIChain):
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
     pve_token: str
     api_docs: str  = ""
-    retriever: VectorStoreRetriever
+    retriever: ContextualCompressionRetriever
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
@@ -35,32 +49,26 @@ class ProxmoxAPIChain(PowerfulAPIChain):
         _run_manager = run_manager or CallbackManagerForChainRun.get_noop_manager()
         question = inputs[self.question_key]
 
-        retrieved_docs = self.retriever.get_relevant_documents(query=question)
-        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+        retrieved_docs = self.retriever.invoke(input=question)
 
         # Log retrieved documents for debugging
         if self.verbose:
             for i, doc in enumerate(retrieved_docs):
                 print(f"Retrieved Document {i}: {doc.page_content}")
+        # Rerank the documents based on relevance using CrossEncoder
 
-        # Define a function to score each document based on relevance to the user query
-        def score_document(doc, query):
-            score = 0
-            for keyword in query.split():
-                if keyword.lower() in doc.page_content.lower():
-                    score += 1
-            return score
+        #relevant_doc = compressed_docs[0]  # Select the most relevant document
+        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
-        # Score and select the most relevant document
-        scored_docs = sorted(retrieved_docs, key=lambda doc: score_document(doc, question), reverse=True)
-        relevant_doc = scored_docs[0]
-
-        if self.verbose:
-            print(f'Selected Document: {relevant_doc.page_content}')
+   
+        # Log retrieved documents for debugging
+        """if self.verbose:
+            print(f"Relevant Document: {relevant_doc.page_content}")"""
+        
 
         request_info = self.api_request_chain.predict(
             question=question,
-            api_docs=relevant_doc.page_content,
+            api_docs=context,
             callbacks=_run_manager.get_child()
         )
         
@@ -167,7 +175,7 @@ class ProxmoxAPIChain(PowerfulAPIChain):
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
-        retriever : VectorStoreRetriever,
+        retriever : ContextualCompressionRetriever,
         api_docs: str = proxmox_api_docs,
         pve_token: Optional[str] = "",
         headers: Optional[Dict[str, Any]] = None,
