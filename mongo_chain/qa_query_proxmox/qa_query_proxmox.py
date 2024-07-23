@@ -23,6 +23,22 @@ client = pymongo.MongoClient(ConfigData.MONGO_DB_URI)
 db = client[ConfigData.DB_NAME]
 collection_name = db[ConfigData.COLLECTION_NAME]
 
+route_chain = (
+    PromptTemplate.from_template(
+        """Given the user question below, classify it as either being about `Computing` or `Other`.
+
+Do not respond with more than one word.
+
+<question>
+{input}
+</question>
+
+Classification:"""
+    )
+    | llm 
+    | StrOutputParser()
+)
+
 query_creation_template= """
     You are an expert in crafting MongoDB aggregation pipeline queries. 
     Given the document schema and schema description in a specific format, 
@@ -56,6 +72,8 @@ answer_prompt = PromptTemplate(
     template=answer_template,
     input_variables=["question", "query", "result"]
 )
+
+
 # Custom function that executes queries against a MongoDB database
 def execute_pipeline(raw_pipeline: str):
     print(f"DEBUG: RAW: {raw_pipeline}")
@@ -65,6 +83,7 @@ def execute_pipeline(raw_pipeline: str):
     answer = [result for result in results]
     print(f"Answer: {answer}")
     return answer 
+
 
 execute_query = RunnableLambda(execute_pipeline)
    # Main Execution Chain
@@ -82,10 +101,29 @@ chain = (
     | StrOutputParser()
 )
 
+general_chain = PromptTemplate.from_template(
+    """Respond to the following question:
+
+Question: {input}
+Answer:"""
+) | llm | StrOutputParser() 
+
+def route(info):
+    if "computing" in info["topic"].lower():
+        print(f"USING: info['topic'].lower()")
+        return chain 
+    else:
+        print(f"USING: {info['topic'].lower()}")
+        return general_chain
+
+full_chain = {"topic": route_chain, "input": lambda x: x["input"]} | RunnableLambda(
+    route
+)
+
 while True:
     try:
         question = input("question > ")
-        for chunk in chain.stream({"input": f"{question}"}):
+        for chunk in full_chain.stream({"input": f"{question}"}):
             print(chunk, end='', flush=True)
 
     except (EOFError, KeyboardInterrupt):
