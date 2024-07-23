@@ -11,4 +11,3 @@ venv/
 *.exe
 *.zip
 *.gz
-.\api_chain\draft_proxmox_api_chain.ipynb
