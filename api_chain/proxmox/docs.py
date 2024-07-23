@@ -3,7 +3,6 @@ import json
 
 _proxmox_api_docs= [
     {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/qemu",
         "method": "get",
         "summary": "List Virtual machines (VMs) on a Node",
@@ -20,7 +19,6 @@ _proxmox_api_docs= [
         ]
     },
     {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/qemu",
         "method": "post",
         "summary": "Create a Virtual machine (VM) ",
@@ -79,7 +77,6 @@ _proxmox_api_docs= [
         }
     },
     {
-        'base_url': 'https://ns31418912.ip-54-38-37.eu:8006/',
         'endpoint': '/api2/json/nodes/{node}/qemu/{vmid}',
         'method': 'delete',
         'summary': 'Delete Virtual machine (VM)',
@@ -106,7 +103,6 @@ _proxmox_api_docs= [
                 ]
     },
     {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/qemu/{vmid}/config",
         "method": "get",
         "summary": "Get Virtual machine/Vm Configuration (config file)",
@@ -141,7 +137,6 @@ _proxmox_api_docs= [
         ]
     },
     {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/qemu/{vmid}/config",
         "method": "post",
         "summary": "Set initial configuration options of a Virtual machine",
@@ -221,7 +216,6 @@ _proxmox_api_docs= [
         }
     },
     {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/qemu/{vmid}/config",
         "method": "put",
         "summary": "Update virtual machine configuration options",
@@ -315,7 +309,6 @@ _proxmox_api_docs= [
         }
     },
     {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/lxc",
         "methods": "get",
         "summary": "List LXC Containers on a Node",
@@ -335,7 +328,6 @@ _proxmox_api_docs= [
         
     },
     {
-    "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
     "endpoint": "/api2/json/nodes/{node}/lxc",
     "methods": "post",
     "summary": "Create LXC Container",
@@ -394,7 +386,6 @@ _proxmox_api_docs= [
         
 },
     {
-            'base_url': 'https://ns31418912.ip-54-38-37.eu:8006/',
             'endpoint': '/api2/json/nodes/{node}/lxc/{vmid}',
             'methods': 'delete',
             'summary': 'Delete LXC Container',
@@ -421,7 +412,6 @@ _proxmox_api_docs= [
                     ]
     },
     {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
         "endpoint": "/api2/json/nodes/{node}/lxc/{vmid}/config",
         "method": "put",
         "summary": "Set container configuration (config file)",
@@ -494,7 +484,6 @@ _proxmox_api_docs= [
     },
 
    {
-    "base_url": "https://ns31418912.ip-54-38-37.eu:8006/",
     "endpoint": "/api2/json/nodes/{node}/lxc/{vmid}/config",
     "method": "get",
     "summary": "Get Lxc container configuration/config ",
@@ -538,6 +527,58 @@ _proxmox_api_docs= [
         }
     ]
 },
+{
+    "endpoint": "/api2/json/access/users",
+    "method": "get",
+    "summary": "User index.",
+    "parameters": [
+        {
+            "name": "enabled",
+            "in": "query",
+            "required": False,
+            "description": "Optional filter for enable property.",
+            "schema": {
+                "type": "boolean",
+            }
+        },
+        {
+            "name": "full",
+            "in": "query",
+            "required": False,
+            "description": "Include group and token information.",
+            "schema": {
+                "type": "boolean",
+                "default": False
+            }
+        }
+    ]
+},
+{
+    "endpoint": "/api2/json/access/permissions",
+    "method": "get",
+    "summary": "Retrieve/get effective permissions of given user/token.",
+    "parameters": [
+        {
+            "name": "path",
+            "in": "query",
+            "required": False,
+            "description": "Only dump this specific path, not the whole tree.",
+            "schema": {
+                "type": "string",
+            }
+        },
+        {
+            "name": "userid",
+            "in": "query",
+            "required": False,
+            "description": "User ID or full API token ID",
+            "schema": {
+                "type": "string",
+            }
+        }
+    ]
+},
+
 
 
     ]
