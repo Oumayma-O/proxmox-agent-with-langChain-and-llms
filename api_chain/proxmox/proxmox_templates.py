@@ -1,7 +1,7 @@
 from langchain.prompts.prompt import PromptTemplate
 
 API_REQUEST_PROMPT_TEMPLATE = """
-Given the following API Documentation: {api_docs}
+Given below API Documentation,
 Your task is to construct the most efficient API URL to answer 
 the user's question, ensuring the 
 call is optimized to include only necessary information.
@@ -10,16 +10,27 @@ default value, do NOT include it in the API URL, unless you think
 it's relevant to the user's question.
 You MUST extract the API URL, request METHOD and generate the BODY data in JSON format
 according to the user question if necessary.
-Only include parameters and BODY data keys that are specified in the user input. Do not include fields in the body request that weren't mentioned by the user.
 The parameters' names and BODY data keys MUST be obtained from the provided context.
 Do NOT make up parameters' names.
 The BODY data can be an empty JSON.
-Output the API URL, METHOD and BODY. Join them with `|`. DO NOT GIVE ANY EXPLANATION.
+Respond in valid json only in the below format and do NOT give any explanation.
 
-Question: {question}
+{{
+    "api_url": "",
+    "request_method": "",
+    "request_body": {{}}
+}}
+
+API Documentation:
+{api_docs}
+
+Question:
+{question}
 
 Output:
+
 """
+
 
 API_REQUEST_PROMPT = PromptTemplate(
     input_variables=["api_docs", "question"],
