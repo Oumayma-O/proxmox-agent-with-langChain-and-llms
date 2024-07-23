@@ -4,7 +4,6 @@ from typing import (
     Dict,
     Optional,
     Sequence,
-    Tuple,
     List
 )
 from langchain_core.pydantic_v1 import Field, root_validator
@@ -36,9 +35,7 @@ from core.utils import (
     _context_runnable
 )
 
-SUPPORTED_HTTP_METHODS: Tuple[str] = (
-    "get", "post", "put", "patch", "delete"
-)
+SUPPORTED_HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
 
 class ExperimentalAPIChain(Chain):
@@ -66,7 +63,15 @@ class ExperimentalAPIChain(Chain):
     allowed_http_methods: Optional[Sequence[str]] = ["get"]
     """Use to limit the allowed HTTP methods.
 
-    * By default, only the GET method is allowed.
+    * By default, only the HTTP GET method is allowed.
+    * If a prohibited HTTP method is used by the LLM, no exceptions will be
+    raised, the LLM will simply be made aware of it.
+    """
+    supported_http_methods: Optional[Sequence[str]] = SUPPORTED_HTTP_METHODS
+    """Use to limit the allowed HTTP methods.
+
+    * By default, supported HTTP methods are: GET, POST, PUT, PATCH, DELETE.
+    * If an unsupported HTTP method is used, an exception will be raised.
     """
 
     @property
@@ -90,7 +95,11 @@ class ExperimentalAPIChain(Chain):
         return list(set([method.strip().lower() for method in self.allowed_http_methods]))
 
     @property
-    def context_dict(self) -> Dict[str, Any]:
+    def _supported_http_methods(self) -> List[str]:
+        return list(set([method.strip().lower() for method in self.supported_http_methods])) or SUPPORTED_HTTP_METHODS
+
+    @property
+    def _context_dict(self) -> Dict[str, Any]:
         if self.api_docs:
             return {"api_docs": self.api_docs}
         return {}
@@ -158,7 +167,7 @@ class ExperimentalAPIChain(Chain):
         question = inputs[self.question_key]
         request_info = self.api_request_chain.invoke(
             {
-                **self.context_dict,
+                **self._context_dict,
                 "question": question,
             },
             {"callbacks": _run_manager.get_child()}
@@ -183,6 +192,11 @@ class ExperimentalAPIChain(Chain):
             print(f"Request method: {request_method.upper()}")
             print(f"Request body: {json.dumps(request_info, indent=4)}")
 
+        if request_method not in self._supported_http_methods:
+            raise ValueError(
+                f"Expected one of {self._supported_http_methods}, got {request_method}"
+            )
+
         if request_method not in self._allowed_http_methods:
             api_response = f"Request method {request_method} is not allowed."
         else:
@@ -194,15 +208,16 @@ class ExperimentalAPIChain(Chain):
             elif request_method in ("post", "put", "patch"):
                 api_response = request_func(api_url, request_body)
             else:
-                raise ValueError(
-                    f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
+                raise NotImplementedError(
+                    f"Request method {request_method.upper()} is currently not implemented."
                 )
+
         run_manager.on_text(
             str(api_response), color="yellow", end="\n", verbose=self.verbose
         )
         answer = self.api_response_chain.invoke(
             {
-                **self.context_dict,
+                **self._context_dict,
                 "question": question,
                 "api_url": api_url,
                 "api_response": api_response,
@@ -218,8 +233,8 @@ class ExperimentalAPIChain(Chain):
         question = inputs[self.question_key]
         request_info = await self.api_request_chain.ainvoke(
             {
+                **self._context_dict,
                 "question": question,
-                "api_docs": self.api_docs,
             },
             {"callbacks": _run_manager.get_child()}
         )
@@ -242,25 +257,34 @@ class ExperimentalAPIChain(Chain):
             print(f"Request method: {request_method.upper()}")
             print(f"Request body: {json.dumps(request_info, indent=4)}")
 
-        # Resolve method by name
-        request_func = getattr(self.requests_wrapper, f"a{request_method}")
-
-        if request_method in ("get", "delete"):
-            api_response = await request_func(api_url)
-        elif request_method in ("post", "put", "patch"):
-            api_response = await request_func(api_url, request_body)
-        else:
+        if request_method not in self._supported_http_methods:
             raise ValueError(
-                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
+                f"Expected one of {self._supported_http_methods}, got {request_method}"
             )
+
+        if request_method not in self._allowed_http_methods:
+            api_response = f"Request method {request_method} is not allowed."
+        else:
+            # Resolve method by name
+            request_func = getattr(self.requests_wrapper, f"a{request_method}")
+
+            if request_method in ("get", "delete"):
+                api_response = await request_func(api_url)
+            elif request_method in ("post", "put", "patch"):
+                api_response = await request_func(api_url, request_body)
+            else:
+                raise NotImplementedError(
+                    f"Request method {request_method.upper()} is currently not implemented."
+                )
+            
         await run_manager.on_text(
             str(api_response), color="yellow", end="\n", verbose=self.verbose
         )
 
         answer = await self.api_response_chain.ainvoke(
             {
+                **self._context_dict,
                 "question": question,
-                "api_docs": self.api_docs,
                 "api_url": api_url,
                 "api_response": api_response,
             },
@@ -279,10 +303,15 @@ class ExperimentalAPIChain(Chain):
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
         **kwargs: Any,
     ) -> 'ExperimentalAPIChain':
-        """Load chain from just an LLM and API docs."""
+        """Load chain from just an LLM and API docs.
+
+        * 'api_docs' and 'retriever' are mutually exclusive, with priority 
+        given to 'api_docs'.
+        """
+        context = _context_runnable(api_docs=api_docs, retriever=retriever)
         api_request_chain = (
             {
-                **_context_runnable(api_docs=api_docs, retriever=retriever),
+                **context,
                 "question": RunnablePassthrough()
             }
             | api_request_prompt
@@ -292,7 +321,7 @@ class ExperimentalAPIChain(Chain):
         requests_wrapper = PowerfulRequestsWrapper(headers=headers)
         api_response_chain = (
             {
-                **_context_runnable(api_docs=api_docs, retriever=retriever),
+                **context,
                 "question": RunnablePassthrough(),
                 "api_url": RunnablePassthrough(),
                 "api_response": RunnablePassthrough(),
