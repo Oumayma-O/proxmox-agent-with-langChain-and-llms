@@ -13,4 +13,11 @@ def _validate_headers(
         return {**auth, **headers}
     return auth
 
+def _validate_URL(
+        base_url: Optional[str] = None,
+) -> str:
+    _base_url = base_url or os.getenv("PROXMOX_BASE_URL")
+    if not _base_url:
+        raise ValueError("Base URL must be provided either as an argument or via the 'PROXMOX_BASE_URL' environment variable.")
+    return _base_url
 
