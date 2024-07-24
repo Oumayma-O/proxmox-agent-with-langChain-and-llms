@@ -44,9 +44,9 @@ class ProxmoxAPIChain(Chain):
     api_request_chain: RunnableSequence
     api_response_chain: RunnableSequence
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
-    pve_token: Optional[str] 
-    api_docs: Optional[str] 
-    base_url:Optional[str]
+    pve_token: Optional[str]= None
+    api_docs: Optional[str] = None
+    base_url:Optional[str] = None
     retriever: ContextualCompressionRetriever
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
@@ -299,8 +299,8 @@ class ProxmoxAPIChain(Chain):
         llm: BaseLanguageModel,
         retriever : ContextualCompressionRetriever,
         api_docs: str = proxmox_api_docs,
-        pve_token: Optional[str] = "",
-        base_url:Optional[str] = "",
+        pve_token: Optional[str] = None,
+        base_url:Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
@@ -336,6 +336,7 @@ class ProxmoxAPIChain(Chain):
             requests_wrapper=requests_wrapper,
             retriever=retriever,
             api_docs=api_docs,
+            base_url=base_url,
             pve_token=pve_token,  
             **kwargs,
         )

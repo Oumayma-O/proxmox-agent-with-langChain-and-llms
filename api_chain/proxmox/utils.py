@@ -14,7 +14,7 @@ def _validate_headers(
     return auth
 
 def _validate_URL(
-        base_url: Optional[str] = None,
+        base_url: str,
 ) -> str:
     _base_url = base_url or os.getenv("PROXMOX_BASE_URL")
     if not _base_url:
