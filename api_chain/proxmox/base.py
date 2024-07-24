@@ -165,7 +165,7 @@ class ProxmoxAPIChain(Chain):
             },
             {"callbacks": _run_manager.get_child()}
         )
-        
+
         if self.verbose:
             print(f"\nRequest info: {json.dumps(request_info, indent=4)}")
 
@@ -205,15 +205,17 @@ class ProxmoxAPIChain(Chain):
                 f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
             )
         run_manager.on_text(
-            str(api_response), color="yellow", end="\n", verbose=self.verbose
+            str(api_response), color="pink", end="\n", verbose=self.verbose
         )
 
-        answer = self.api_answer_chain.predict(
-            question=question,
-            api_docs=context,
-            api_url=api_url,
-            api_response=api_response,
-            callbacks=_run_manager.get_child()
+        answer = self.api_response_chain.invoke(
+            {
+                **self.context_dict,
+                "question": question,
+                "api_url": api_url,
+                "api_response": api_response,
+            },
+            {"callbacks": _run_manager.get_child()}
         )
 
         return {self.output_key: answer}
@@ -228,10 +230,12 @@ class ProxmoxAPIChain(Chain):
 
         context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
-        request_info = await self.api_request_chain.apredict(
-            question=question,
-            api_docs=context,
-            callbacks=_run_manager.get_child()
+        request_info = await self.api_request_chain.ainvoke(
+            {
+                **self._context_dict,
+                "question": question,
+            },
+            {"callbacks": _run_manager.get_child()}
         )
 
         if self.verbose:
@@ -276,12 +280,14 @@ class ProxmoxAPIChain(Chain):
             str(api_response), color="yellow", end="\n", verbose=self.verbose
         )
 
-        answer = await self.api_answer_chain.apredict(
-            question=question,
-            api_docs=context,
-            api_url=api_url,
-            api_response=api_response,
-            callbacks=_run_manager.get_child()
+        answer = await self.api_response_chain.ainvoke(
+            {
+                **self._context_dict,
+                "question": question,
+                "api_url": api_url,
+                "api_response": api_response,
+            },
+            {"callbacks": _run_manager.get_child()}
         )
 
         return {self.output_key: answer}
