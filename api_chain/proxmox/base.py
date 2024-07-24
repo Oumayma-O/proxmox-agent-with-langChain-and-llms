@@ -8,6 +8,15 @@ from langchain.chains import APIChain
 from langchain.chains.api.base import (
     _check_in_allowed_domain,
 )
+import os
+from langchain_core.output_parsers import JsonOutputParser
+from typing import Any, Dict, Optional, Sequence, Tuple , List
+from pydantic import Field
+
+from langchain.chains import APIChain
+from langchain.chains.api.base import (
+    _check_in_allowed_domain,
+)
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
@@ -20,8 +29,29 @@ from langchain.chains.base import Chain
 from sklearn import base
 from proxmox.models import APIRequest
 from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForChainRun,
+    CallbackManagerForChainRun,
+)
+from langchain.prompts import BasePromptTemplate
+from langchain.chains.base import Chain
+from sklearn import base
+from proxmox.models import APIRequest
+from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
 from proxmox.docs import proxmox_api_docs
+from proxmox.utils import _validate_URL, _validate_headers
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain_core.runnables import RunnableSequence, RunnablePassthrough
+from langchain_core.output_parsers.string import StrOutputParser
+from langchain_core.pydantic_v1 import Field, root_validator
+from core.utils import (
+    _postprocess_text,
+    _format_docs,
+    _context_runnable
+)
+
+
 from proxmox.utils import _validate_URL, _validate_headers
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain_core.runnables import RunnableSequence, RunnablePassthrough
@@ -160,7 +190,7 @@ class ProxmoxAPIChain(Chain):
     
         request_info = self.api_request_chain.invoke(
             {
-                "api_docs" :self.context_str(question=question),
+                **self.context_dict,
                 "question": question,
             },
             {"callbacks": _run_manager.get_child()}
@@ -218,6 +248,7 @@ class ProxmoxAPIChain(Chain):
             {"callbacks": _run_manager.get_child()}
         )
 
+
         return {self.output_key: answer}
 
     async def _acall(self,
@@ -238,6 +269,7 @@ class ProxmoxAPIChain(Chain):
             {"callbacks": _run_manager.get_child()}
         )
 
+
         if self.verbose:
             print(f'Request info: {request_info}')
 
@@ -245,8 +277,8 @@ class ProxmoxAPIChain(Chain):
         base_url = self.base_url or os.getenv("PROXMOX_BASE_URL")
         if not base_url:
             raise ValueError("Base URL for Proxmox API not provided.")
-        os.environ["PROXMOX_BASE_URL"] = base_url
-
+        os.environ["PROXMOX_BASE_URL"] = base_ur
+        
         api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
         
         if self.limit_to_domains and not _check_in_allowed_domain(
@@ -289,6 +321,8 @@ class ProxmoxAPIChain(Chain):
             },
             {"callbacks": _run_manager.get_child()}
         )
+
+
 
         return {self.output_key: answer}
 
