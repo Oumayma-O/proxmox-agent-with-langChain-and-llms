@@ -8,9 +8,27 @@ from langchain.chains import APIChain
 from langchain.chains.api.base import (
     _check_in_allowed_domain,
 )
+import os
+from langchain_core.output_parsers import JsonOutputParser
+from typing import Any, Dict, Optional, Sequence, Tuple , List
+from pydantic import Field
+
+from langchain.chains import APIChain
+from langchain.chains.api.base import (
+    _check_in_allowed_domain,
+)
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForChainRun,
+    CallbackManagerForChainRun,
+)
+from langchain.prompts import BasePromptTemplate
+from langchain.chains.base import Chain
+from sklearn import base
+from proxmox.models import APIRequest
+from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from langchain_core.callbacks import (
     AsyncCallbackManagerForChainRun,
     CallbackManagerForChainRun,
@@ -34,6 +52,18 @@ from core.utils import (
 )
 
 
+from proxmox.utils import _validate_URL, _validate_headers
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain_core.runnables import RunnableSequence, RunnablePassthrough
+from langchain_core.output_parsers.string import StrOutputParser
+from langchain_core.pydantic_v1 import Field, root_validator
+from core.utils import (
+    _postprocess_text,
+    _format_docs,
+    _context_runnable
+)
+
+
 
 SUPPORTED_HTTP_METHODS: Tuple[str] = (
     "get", "post", "put", "patch", "delete"
@@ -43,7 +73,14 @@ SUPPORTED_HTTP_METHODS: Tuple[str] = (
 class ProxmoxAPIChain(Chain):
     api_request_chain: RunnableSequence
     api_response_chain: RunnableSequence
+class ProxmoxAPIChain(Chain):
+    api_request_chain: RunnableSequence
+    api_response_chain: RunnableSequence
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
+    pve_token: Optional[str]= None
+    api_docs: Optional[str] = None
+    base_url:Optional[str] = None
+    retriever: ContextualCompressionRetriever
     pve_token: Optional[str]= None
     api_docs: Optional[str] = None
     base_url:Optional[str] = None
@@ -51,6 +88,100 @@ class ProxmoxAPIChain(Chain):
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
+    """Use to limit the domains that can be accessed by the API chain.
+    
+    * For example, to limit to just the domain `https://www.example.com`, set
+        `limit_to_domains=["https://www.example.com"]`.
+        
+    * The default value is an empty tuple, which means that no domains are
+        allowed by default. By design this will raise an error on instantiation.
+
+    * Use a None if you want to allow all domains by default -- this is not
+        recommended for security reasons, as it would allow malicious users to
+        make requests to arbitrary URLS including internal APIs accessible from
+        the server.
+    """
+
+    @property
+    def input_keys(self) -> List[str]:
+        """Expect input key.
+
+        :meta private:
+        """
+        return [self.question_key]
+
+    @property
+    def output_keys(self) -> List[str]:
+        """Expect output key.
+
+        :meta private:
+        """
+        return [self.output_key]
+
+    @property
+    def _allowed_http_methods(self) -> List[str]:
+        return list(set([method.strip().lower() for method in self.allowed_http_methods]))
+
+    @property
+    def context_dict(self) -> Dict[str, Any]:
+        if self.api_docs:
+            return {"api_docs": self.api_docs}
+        return {}
+
+    def context_str(self, question: str) -> str:
+        """Returns the text passed to the LLM as context."""
+        if self.api_docs:
+            return self.api_docs
+        return _format_docs(self.retriever.get_relevant_documents(query=question))
+
+    @root_validator(pre=True)
+    def validate_api_docs_and_retriever(cls, values: Dict) -> Dict:
+        """Check that either api docs or retriever are set."""
+        if "api_docs" not in values and "retriever" not in values:
+            raise ValueError(
+                "Either 'api_docs' or 'retriever' must be set"
+            )
+        return values
+
+    @root_validator(pre=True)
+    def validate_api_request_prompt(cls, values: Dict) -> Dict:
+        """Check that api request prompt expects the right variables."""
+        input_vars = values["api_request_chain"].middle[0].input_variables
+        expected_vars = {"question", "api_docs"}
+        if set(input_vars) != expected_vars:
+            raise ValueError(
+                f"Input variables should be {expected_vars}, got {input_vars}"
+            )
+        return values
+
+    @root_validator(pre=True)
+    def validate_limit_to_domains(cls, values: Dict) -> Dict:
+        """Check that allowed domains are valid."""
+        if "limit_to_domains" not in values:
+            raise ValueError(
+                "You must specify a list of domains to limit access using "
+                "`limit_to_domains`"
+            )
+        if (
+            not values["limit_to_domains"]
+            and values["limit_to_domains"] is not None
+        ):
+            raise ValueError(
+                "Please provide a list of domains to limit access using "
+                "`limit_to_domains`."
+            )
+        return values
+
+    @root_validator(pre=True)
+    def validate_api_response_prompt(cls, values: Dict) -> Dict:
+        """Check that api answer prompt expects the right variables."""
+        input_vars = values["api_response_chain"].middle[0].input_variables
+        expected_vars = {"question", "api_docs", "api_url", "api_response"}
+        if set(input_vars) != expected_vars:
+            raise ValueError(
+                f"Input variables should be {expected_vars}, got {input_vars}"
+            )
+        return values
     """Use to limit the domains that can be accessed by the API chain.
     
     * For example, to limit to just the domain `https://www.example.com`, set
@@ -164,9 +295,22 @@ class ProxmoxAPIChain(Chain):
                 "question": question,
             },
             {"callbacks": _run_manager.get_child()}
+        # Log retrieved documents for debugging
+        if self.verbose:
+            for i, doc in enumerate(self.retriever.get_relevant_documents(query=question)):
+                print(f"Retrieved Document {i}: {doc.page_content}")
+
+    
+        request_info = self.api_request_chain.invoke(
+            {
+                "api_docs" :self.context_str(question=question),
+                "question": question,
+            },
+            {"callbacks": _run_manager.get_child()}
         )
         
         if self.verbose:
+            print(f"\nRequest info: {json.dumps(request_info, indent=4)}")
             print(f"\nRequest info: {json.dumps(request_info, indent=4)}")
 
         # Construct the full API URL dynamically
@@ -174,6 +318,13 @@ class ProxmoxAPIChain(Chain):
         if not base_url:
             raise ValueError("Base URL for Proxmox API not provided.")
         os.environ["PROXMOX_BASE_URL"] = base_url
+        # Construct the full API URL dynamically
+        base_url = self.base_url or os.getenv("PROXMOX_BASE_URL")
+        if not base_url:
+            raise ValueError("Base URL for Proxmox API not provided.")
+        os.environ["PROXMOX_BASE_URL"] = base_url
+
+        api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
 
         api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
 
@@ -183,6 +334,10 @@ class ProxmoxAPIChain(Chain):
             raise ValueError(
                 f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
             )
+        request_method = _postprocess_text(
+            request_info["request_method"]).lower()
+
+        request_body: Dict[str, Any] = request_info["request_body"]
         request_method = _postprocess_text(
             request_info["request_method"]).lower()
 
@@ -200,6 +355,7 @@ class ProxmoxAPIChain(Chain):
             api_response = request_func(api_url)
         elif request_method in ("post", "put", "patch"):
             api_response = request_func(api_url, request_body)
+            api_response = request_func(api_url, request_body)
         else:
             raise ValueError(
                 f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
@@ -216,6 +372,7 @@ class ProxmoxAPIChain(Chain):
             callbacks=_run_manager.get_child()
         )
 
+
         return {self.output_key: answer}
 
     async def _acall(self,
@@ -227,12 +384,14 @@ class ProxmoxAPIChain(Chain):
         retrieved_docs = self.retriever.get_relevant_documents(query=question)
 
         context = "\n\n".join([doc.page_content for doc in retrieved_docs])
+        context = "\n\n".join([doc.page_content for doc in retrieved_docs])
 
         request_info = await self.api_request_chain.apredict(
             question=question,
             api_docs=context,
             callbacks=_run_manager.get_child()
         )
+
 
         if self.verbose:
             print(f'Request info: {request_info}')
@@ -242,13 +401,42 @@ class ProxmoxAPIChain(Chain):
         if not base_url:
             raise ValueError("Base URL for Proxmox API not provided.")
         os.environ["PROXMOX_BASE_URL"] = base_url
+        # Construct the full API URL dynamically
+        base_url = self.base_url or os.getenv("PROXMOX_BASE_URL")
+        if not base_url:
+            raise ValueError("Base URL for Proxmox API not provided.")
+        os.environ["PROXMOX_BASE_URL"] = base_url
 
+        api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
+        
         api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
         
         if self.limit_to_domains and not _check_in_allowed_domain(
             api_url, self.limit_to_domains
         ):
             raise ValueError(
+                f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
+            )
+        request_method = _postprocess_text(
+            request_info["request_method"]).lower()
+        request_body: Dict[str, Any] = request_info["request_body"]
+
+
+        if self.verbose:
+            print(f"API URL: {api_url}")
+            print(f"Request method: {request_method.upper()}")
+            print(f"Request body: {request_body}")
+
+        # Resolve the method by name
+        request_func = getattr(self.requests_wrapper, f"a{request_method}")
+
+        if request_method in ("get", "delete"):
+            api_response = await request_func(api_url)
+        elif request_method in ("post", "put", "patch"):
+            api_response = await request_func(api_url, json.loads(request_body))
+        else:
+            raise ValueError(
+                f"Expected one of {SUPPORTED_HTTP_METHODS}, got {request_method}"
                 f"{api_url} is not in the allowed domains: {self.limit_to_domains}"
             )
         request_method = _postprocess_text(
@@ -284,6 +472,7 @@ class ProxmoxAPIChain(Chain):
             callbacks=_run_manager.get_child()
         )
 
+
         return {self.output_key: answer}
 
     @classmethod
@@ -291,7 +480,10 @@ class ProxmoxAPIChain(Chain):
         cls,
         llm: BaseLanguageModel,
         retriever : ContextualCompressionRetriever,
+        retriever : ContextualCompressionRetriever,
         api_docs: str = proxmox_api_docs,
+        pve_token: Optional[str] = None,
+        base_url:Optional[str] = None,
         pve_token: Optional[str] = None,
         base_url:Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None,
@@ -300,6 +492,16 @@ class ProxmoxAPIChain(Chain):
         **kwargs: Any,
     ) -> 'ProxmoxAPIChain':
         """Load chain from just an LLM and the api docs."""
+        api_request_chain = (
+            {
+                **_context_runnable(api_docs=api_docs, retriever=retriever),
+                "question": RunnablePassthrough()
+            }
+            | api_url_prompt
+            | llm
+            | JsonOutputParser(pydantic_object=APIRequest)
+        )
+        base_url = _validate_URL(base_url=base_url)
         api_request_chain = (
             {
                 **_context_runnable(api_docs=api_docs, retriever=retriever),
@@ -323,12 +525,28 @@ class ProxmoxAPIChain(Chain):
             | llm
             | StrOutputParser()
         )
+        api_response_chain = (
+            {
+                **_context_runnable(api_docs=api_docs, retriever=retriever),
+                "question": RunnablePassthrough(),
+                "api_url": RunnablePassthrough(),
+                "api_response": RunnablePassthrough(),
+            }
+            | api_response_prompt
+            | llm
+            | StrOutputParser()
+        )
         return cls(
+            api_request_chain=api_request_chain,
+            api_response_chain=api_response_chain,
             api_request_chain=api_request_chain,
             api_response_chain=api_response_chain,
             requests_wrapper=requests_wrapper,
             retriever=retriever,
+            retriever=retriever,
             api_docs=api_docs,
+            base_url=base_url,
+            pve_token=pve_token,  
             base_url=base_url,
             pve_token=pve_token,  
             **kwargs,
