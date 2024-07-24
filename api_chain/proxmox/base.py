@@ -17,11 +17,12 @@ from langchain_core.callbacks import (
 )
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.base import Chain
+from sklearn import base
 from proxmox.models import APIRequest
 from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
 from proxmox.docs import proxmox_api_docs
-from proxmox.utils import _validate_headers
+from proxmox.utils import _validate_URL, _validate_headers
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain_core.runnables import RunnableSequence, RunnablePassthrough
 from langchain_core.output_parsers.string import StrOutputParser
@@ -43,8 +44,9 @@ class ProxmoxAPIChain(Chain):
     api_request_chain: RunnableSequence
     api_response_chain: RunnableSequence
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
-    pve_token: str
-    api_docs: str  = ""
+    pve_token: Optional[str] 
+    api_docs: Optional[str] 
+    base_url:Optional[str]
     retriever: ContextualCompressionRetriever
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
@@ -168,12 +170,10 @@ class ProxmoxAPIChain(Chain):
             print(f"\nRequest info: {json.dumps(request_info, indent=4)}")
 
         # Construct the full API URL dynamically
-        base_url = os.getenv("PROXMOX_BASE_URL")
+        base_url = self.base_url or os.getenv("PROXMOX_BASE_URL")
         if not base_url:
-            base_url = input("Base URL: ").strip()
-            if not base_url:
-                raise ValueError("Base URL for Proxmox API not provided.")
-            os.environ["PROXMOX_BASE_URL"] = base_url
+            raise ValueError("Base URL for Proxmox API not provided.")
+        os.environ["PROXMOX_BASE_URL"] = base_url
 
         api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
 
@@ -238,12 +238,10 @@ class ProxmoxAPIChain(Chain):
             print(f'Request info: {request_info}')
 
         # Construct the full API URL dynamically
-        base_url = os.getenv("PROXMOX_BASE_URL")
+        base_url = self.base_url or os.getenv("PROXMOX_BASE_URL")
         if not base_url:
-            base_url = input("Base URL: ").strip()
-            if not base_url:
-                raise ValueError("Base URL for Proxmox API not provided.")
-            os.environ["PROXMOX_BASE_URL"] = base_url
+            raise ValueError("Base URL for Proxmox API not provided.")
+        os.environ["PROXMOX_BASE_URL"] = base_url
 
         api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
         
@@ -295,6 +293,7 @@ class ProxmoxAPIChain(Chain):
         retriever : ContextualCompressionRetriever,
         api_docs: str = proxmox_api_docs,
         pve_token: Optional[str] = "",
+        base_url:Optional[str] = "",
         headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
@@ -310,6 +309,7 @@ class ProxmoxAPIChain(Chain):
             | llm
             | JsonOutputParser(pydantic_object=APIRequest)
         )
+        base_url = _validate_URL(base_url=base_url)
         headers = _validate_headers(headers=headers, pve_token=pve_token)
         requests_wrapper = PowerfulRequestsWrapper(headers=headers)
         api_response_chain = (
