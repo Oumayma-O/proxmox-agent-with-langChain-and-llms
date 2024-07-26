@@ -120,12 +120,26 @@ class ProxmoxAPIChain(Chain):
         if self.api_docs:
             return {"api_docs": self.api_docs}
         return {}
+    
+    @property
+    def resolved_base_url(self) -> str:
+        if not self.base_url:
+            self.base_url = os.getenv("PROXMOX_BASE_URL")
+        return self.base_url
+
+    @root_validator(pre=True)
+    def validate_base_url(cls, values: Dict) -> Dict:
+        _base_url = values.get('base_url') or os.getenv("PROXMOX_BASE_URL")
+        if not _base_url:
+            raise ValueError("Base URL for Proxmox API not provided.")
+        values['base_url'] = _base_url
+        return values
 
     def context_str(self, question: str) -> str:
         """Returns the text passed to the LLM as context."""
         if self.api_docs:
             return self.api_docs
-        return _format_docs(self.retriever.get_relevant_documents(query=question))
+        return _format_docs(self.retriever.invoke(input=question))
 
     @root_validator(pre=True)
     def validate_api_docs_and_retriever(cls, values: Dict) -> Dict:
@@ -140,7 +154,7 @@ class ProxmoxAPIChain(Chain):
     def validate_api_request_prompt(cls, values: Dict) -> Dict:
         """Check that api request prompt expects the right variables."""
         input_vars = values["api_request_chain"].middle[0].input_variables
-        expected_vars = {"question", "api_docs"}
+        expected_vars = {"question", "api_docs" , "base_url"}
         if set(input_vars) != expected_vars:
             raise ValueError(
                 f"Input variables should be {expected_vars}, got {input_vars}"
@@ -169,7 +183,7 @@ class ProxmoxAPIChain(Chain):
     def validate_api_response_prompt(cls, values: Dict) -> Dict:
         """Check that api answer prompt expects the right variables."""
         input_vars = values["api_response_chain"].middle[0].input_variables
-        expected_vars = {"question", "api_docs", "api_url", "api_response"}
+        expected_vars = {"question", "api_docs", "api_url", "api_response" }
         if set(input_vars) != expected_vars:
             raise ValueError(
                 f"Input variables should be {expected_vars}, got {input_vars}"
@@ -184,7 +198,7 @@ class ProxmoxAPIChain(Chain):
 
         # Log retrieved documents for debugging
         if self.verbose:
-            for i, doc in enumerate(self.retriever.get_relevant_documents(query=question)):
+            for i, doc in enumerate(self.retriever.invoke(input=question)):
                 print(f"Retrieved Document {i}: {doc.page_content}")
 
     
@@ -192,6 +206,7 @@ class ProxmoxAPIChain(Chain):
             {
                 **self.context_dict,
                 "question": question,
+                "base_url":self.resolved_base_url,
             },
             {"callbacks": _run_manager.get_child()}
         )
@@ -199,13 +214,9 @@ class ProxmoxAPIChain(Chain):
         if self.verbose:
             print(f"\nRequest info: {json.dumps(request_info, indent=4)}")
 
-        # Construct the full API URL dynamically
-        base_url = self.base_url or os.getenv("PROXMOX_BASE_URL")
-        if not base_url:
-            raise ValueError("Base URL for Proxmox API not provided.")
-        os.environ["PROXMOX_BASE_URL"] = base_url
 
-        api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
+        # Construct the full API URL dynamically
+        api_url = f"{_postprocess_text(request_info['api_url'])}"
 
         if self.limit_to_domains and not _check_in_allowed_domain(
             api_url, self.limit_to_domains
@@ -244,6 +255,8 @@ class ProxmoxAPIChain(Chain):
                 "question": question,
                 "api_url": api_url,
                 "api_response": api_response,
+                "base_url":self.resolved_base_url,
+
             },
             {"callbacks": _run_manager.get_child()}
         )
@@ -265,6 +278,8 @@ class ProxmoxAPIChain(Chain):
             {
                 **self._context_dict,
                 "question": question,
+                "base_url":self.resolved_base_url,
+               
             },
             {"callbacks": _run_manager.get_child()}
         )
@@ -274,12 +289,7 @@ class ProxmoxAPIChain(Chain):
             print(f'Request info: {request_info}')
 
         # Construct the full API URL dynamically
-        base_url = self.base_url or os.getenv("PROXMOX_BASE_URL")
-        if not base_url:
-            raise ValueError("Base URL for Proxmox API not provided.")
-        os.environ["PROXMOX_BASE_URL"] = base_ur
-        
-        api_url = f"{base_url}{_postprocess_text(request_info['api_url'])}"
+        api_url = f"{_postprocess_text(request_info['api_url'])}"
         
         if self.limit_to_domains and not _check_in_allowed_domain(
             api_url, self.limit_to_domains
@@ -318,6 +328,8 @@ class ProxmoxAPIChain(Chain):
                 "question": question,
                 "api_url": api_url,
                 "api_response": api_response,
+                "base_url":self.resolved_base_url,
+
             },
             {"callbacks": _run_manager.get_child()}
         )
@@ -330,10 +342,10 @@ class ProxmoxAPIChain(Chain):
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
-        retriever : ContextualCompressionRetriever,
+        retriever: ContextualCompressionRetriever,
         api_docs: str = proxmox_api_docs,
         pve_token: Optional[str] = None,
-        base_url:Optional[str] = None,
+        base_url: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None,
         api_url_prompt: BasePromptTemplate = API_REQUEST_PROMPT,
         api_response_prompt: BasePromptTemplate = API_RESPONSE_PROMPT,
@@ -343,7 +355,9 @@ class ProxmoxAPIChain(Chain):
         api_request_chain = (
             {
                 **_context_runnable(api_docs=api_docs, retriever=retriever),
-                "question": RunnablePassthrough()
+                "question": RunnablePassthrough(),
+                "base_url": RunnablePassthrough(),
+
             }
             | api_url_prompt
             | llm
@@ -358,6 +372,7 @@ class ProxmoxAPIChain(Chain):
                 "question": RunnablePassthrough(),
                 "api_url": RunnablePassthrough(),
                 "api_response": RunnablePassthrough(),
+                "base_url": RunnablePassthrough(),
             }
             | api_response_prompt
             | llm
@@ -370,9 +385,10 @@ class ProxmoxAPIChain(Chain):
             retriever=retriever,
             api_docs=api_docs,
             base_url=base_url,
-            pve_token=pve_token,  
+            pve_token=pve_token,
             **kwargs,
         )
+
 
     @property
     def _chain_type(self) -> str:
