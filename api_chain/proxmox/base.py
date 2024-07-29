@@ -1,39 +1,15 @@
 import json
 import os
 from langchain_core.output_parsers import JsonOutputParser
-from typing import Any, Dict, Optional, Sequence, Tuple , List
+from typing import Any, Dict, Optional, Sequence, Tuple, List
 from pydantic import Field
 
 from langchain.chains import APIChain
-from langchain.chains.api.base import (
-    _check_in_allowed_domain,
-)
-import os
-from langchain_core.output_parsers import JsonOutputParser
-from typing import Any, Dict, Optional, Sequence, Tuple , List
-from pydantic import Field
-
-from langchain.chains import APIChain
-from langchain.chains.api.base import (
-    _check_in_allowed_domain,
-)
+from langchain.chains.api.base import _check_in_allowed_domain
 from langchain.prompts import BasePromptTemplate
 from langchain.chains.llm import LLMChain
 from langchain_core.language_models import BaseLanguageModel
-from langchain_core.callbacks import (
-    AsyncCallbackManagerForChainRun,
-    CallbackManagerForChainRun,
-)
-from langchain.prompts import BasePromptTemplate
-from langchain.chains.base import Chain
-from sklearn import base
-from proxmox.models import APIRequest
-from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
-from langchain_core.callbacks import (
-    AsyncCallbackManagerForChainRun,
-    CallbackManagerForChainRun,
-)
-from langchain.prompts import BasePromptTemplate
+from langchain_core.callbacks import AsyncCallbackManagerForChainRun, CallbackManagerForChainRun
 from langchain.chains.base import Chain
 from sklearn import base
 from proxmox.models import APIRequest
@@ -41,28 +17,11 @@ from proxmox.proxmox_templates import API_REQUEST_PROMPT, API_RESPONSE_PROMPT
 from core.requests import PowerfulRequestsWrapper
 from proxmox.docs import proxmox_api_docs
 from proxmox.utils import _validate_URL, _validate_headers
-from langchain.retrievers import ContextualCompressionRetriever
+from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnableSequence, RunnablePassthrough
 from langchain_core.output_parsers.string import StrOutputParser
 from langchain_core.pydantic_v1 import Field, root_validator
-from core.utils import (
-    _postprocess_text,
-    _format_docs,
-    _context_runnable
-)
-
-
-from proxmox.utils import _validate_URL, _validate_headers
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain_core.runnables import RunnableSequence, RunnablePassthrough
-from langchain_core.output_parsers.string import StrOutputParser
-from langchain_core.pydantic_v1 import Field, root_validator
-from core.utils import (
-    _postprocess_text,
-    _format_docs,
-    _context_runnable
-)
-
+from core.utils import _postprocess_text, _format_docs, _context_runnable
 
 
 SUPPORTED_HTTP_METHODS: Tuple[str] = (
@@ -77,7 +36,7 @@ class ProxmoxAPIChain(Chain):
     pve_token: Optional[str]= None
     api_docs: Optional[str] = None
     base_url:Optional[str] = None
-    retriever: ContextualCompressionRetriever
+    retriever: BaseRetriever
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
@@ -342,7 +301,7 @@ class ProxmoxAPIChain(Chain):
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
-        retriever: ContextualCompressionRetriever,
+        retriever: BaseRetriever,
         api_docs: str = proxmox_api_docs,
         pve_token: Optional[str] = None,
         base_url: Optional[str] = None,
