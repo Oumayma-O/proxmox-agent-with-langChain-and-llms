@@ -12,3 +12,4 @@ venv/
 *.zip
 *.gz
 .vscode
+*.env

@@ -10,3 +10,11 @@ widgetsnbextension
 pandas-profiling
 jupyter
 hvac
+xformers
+langgraph
+surrealdb
+torch==2.4.0+cu124
+torchvision==0.15.1+cu124
+torchaudio==0.10.1+cu124
+python-dotenv
+-f https://download.pytorch.org/whl/cu124
