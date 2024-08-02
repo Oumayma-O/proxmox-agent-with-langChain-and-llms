@@ -34,9 +34,9 @@ class ProxmoxAPIChain(Chain):
     api_response_chain: RunnableSequence
     requests_wrapper: PowerfulRequestsWrapper = Field(exclude=True)
     pve_token: Optional[str]= None
-    api_docs: Optional[str] = None
+    api_docs: Optional[str] = proxmox_api_docs
     base_url:Optional[str] = None
-    retriever: BaseRetriever
+    retriever: Optional[BaseRetriever]= None
     question_key: str = "question"  #: :meta private:
     output_key: str = "output"  #: :meta private:
     limit_to_domains: Optional[Sequence[str]]
@@ -301,8 +301,8 @@ class ProxmoxAPIChain(Chain):
     def from_llm_and_api_docs(
         cls,
         llm: BaseLanguageModel,
-        retriever: BaseRetriever,
-        api_docs: str = proxmox_api_docs,
+        retriever: Optional[BaseRetriever] = None,
+        api_docs: Optional[str] = proxmox_api_docs,
         pve_token: Optional[str] = None,
         base_url: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None,
