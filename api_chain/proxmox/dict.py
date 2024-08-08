@@ -9,13 +9,19 @@ proxmox_HCM_api_token = os.getenv('PROXMOX_HCM_API_TOKEN')
 node5_api_token = os.getenv('NODE_5_API_TOKEN')
 
 # Define the Proxmox nodes with their base URLs and API tokens
-proxmox_nodes = {
-    "Proxmox-Node-HCM": {
-        "base_url": "https://ns31418912.ip-54-38-37.eu:8006",
-        "api_token": proxmox_HCM_api_token
+proxmox_nodes = [
+    {
+        "node_name": "Proxmox-Node-HCM",
+        "node_info": {
+            "base_url": "https://ns31418912.ip-54-38-37.eu:8006",
+            "api_token": proxmox_HCM_api_token
+        }
     },
-    "ns31212248": {
-        "base_url": "https://ns31212248.ip-51-178-74.eu:8006",
-        "api_token": node5_api_token
+    {
+        "node_name": "ns31212248",
+        "node_info": {
+            "base_url": "https://ns31212248.ip-51-178-74.eu:8006",
+            "api_token": node5_api_token
+        }
     }
-}
+]
