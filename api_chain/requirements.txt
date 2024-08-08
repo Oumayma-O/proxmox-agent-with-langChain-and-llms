@@ -4,6 +4,7 @@ langchain-core==0.2.10
 langchain-google-genai
 langchain-huggingface
 langchain-chroma
+langchain-ollama
 ipykernel
 ipywidgets
 widgetsnbextension
@@ -16,5 +17,8 @@ surrealdb
 torch==2.4.0+cu124
 torchvision==0.15.1+cu124
 torchaudio==0.10.1+cu124
+python-dotenv
+llama-index 
+langfuse
 python-dotenv
 -f https://download.pytorch.org/whl/cu124
