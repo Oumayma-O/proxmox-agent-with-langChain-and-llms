@@ -5,6 +5,7 @@ langchain-google-genai
 langchain-huggingface
 langchain-chroma
 langchain-ollama
+langchain-groq
 ipykernel
 ipywidgets
 widgetsnbextension

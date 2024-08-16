@@ -94,11 +94,6 @@ class ProxmoxAPIChain(Chain):
         values['base_url'] = _base_url
         return values
 
-    def context_str(self, question: str) -> str:
-        """Returns the text passed to the LLM as context."""
-        if self.api_docs:
-            return self.api_docs
-        return _format_docs(self.retriever.invoke(input=question))
 
     @root_validator(pre=True)
     def validate_api_docs_and_retriever(cls, values: Dict) -> Dict:
@@ -113,7 +108,7 @@ class ProxmoxAPIChain(Chain):
     def validate_api_request_prompt(cls, values: Dict) -> Dict:
         """Check that api request prompt expects the right variables."""
         input_vars = values["api_request_chain"].middle[0].input_variables
-        expected_vars = {"question", "api_docs" , "base_url"}
+        expected_vars = {"question", "api_docs"}
         if set(input_vars) != expected_vars:
             raise ValueError(
                 f"Input variables should be {expected_vars}, got {input_vars}"
@@ -148,6 +143,17 @@ class ProxmoxAPIChain(Chain):
                 f"Input variables should be {expected_vars}, got {input_vars}"
             )
         return values
+     
+    def context_str(self, question: str) -> str:
+        """Returns the text passed to the LLM as context."""
+        if self.api_docs:
+            return self.api_docs
+        # Retrieve and return the first document's content if api_docs is not provided
+        if self.retriever:
+            docs = self.retriever.invoke(input=question)
+            if docs:
+                return docs[0].page_content
+        raise ValueError("No API docs or retriever content available.")
 
     def _call(self,
               inputs: Dict[str, str],
@@ -165,7 +171,6 @@ class ProxmoxAPIChain(Chain):
             {
                 **self.context_dict,
                 "question": question,
-                "base_url":self.resolved_base_url,
             },
             {"callbacks": _run_manager.get_child()}
         )
@@ -173,9 +178,13 @@ class ProxmoxAPIChain(Chain):
         if self.verbose:
             print(f"\nRequest info: {json.dumps(request_info, indent=4)}")
 
+        # Construct the full API URL dynamically by concatenating the base URL and request_info['api_url']
+        base_url = self.resolved_base_url
+        api_url = f"{base_url.rstrip('/')}/{_postprocess_text(request_info['api_url']).lstrip('/')}"
 
-        # Construct the full API URL dynamically
-        api_url = f"{_postprocess_text(request_info['api_url'])}"
+        if self.verbose:
+            print(f"Full API URL: {api_url}")
+
 
         if self.limit_to_domains and not _check_in_allowed_domain(
             api_url, self.limit_to_domains
@@ -214,8 +223,6 @@ class ProxmoxAPIChain(Chain):
                 "question": question,
                 "api_url": api_url,
                 "api_response": api_response,
-                "base_url":self.resolved_base_url,
-
             },
             {"callbacks": _run_manager.get_child()}
         )
@@ -237,7 +244,6 @@ class ProxmoxAPIChain(Chain):
             {
                 **self._context_dict,
                 "question": question,
-                "base_url":self.resolved_base_url,
                
             },
             {"callbacks": _run_manager.get_child()}
@@ -247,9 +253,10 @@ class ProxmoxAPIChain(Chain):
         if self.verbose:
             print(f'Request info: {request_info}')
 
-        # Construct the full API URL dynamically
-        api_url = f"{_postprocess_text(request_info['api_url'])}"
-        
+        # Construct the full API URL dynamically by concatenating the base URL and request_info['api_url']
+        base_url = self.resolved_base_url
+        api_url = f"{base_url.rstrip('/')}/{_postprocess_text(request_info['api_url']).lstrip('/')}"
+
         if self.limit_to_domains and not _check_in_allowed_domain(
             api_url, self.limit_to_domains
         ):
@@ -287,7 +294,6 @@ class ProxmoxAPIChain(Chain):
                 "question": question,
                 "api_url": api_url,
                 "api_response": api_response,
-                "base_url":self.resolved_base_url,
 
             },
             {"callbacks": _run_manager.get_child()}

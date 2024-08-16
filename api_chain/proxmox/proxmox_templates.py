@@ -1,13 +1,13 @@
 from langchain.prompts.prompt import PromptTemplate
 
 API_REQUEST_PROMPT_TEMPLATE = """
-Given below API Documentation and the base URL: {base_url},
+Given below API Documentation ,
 Your task is to construct the most efficient API URL to answer 
 the user's question, ensuring the 
 call is optimized to include only necessary information.
-If a parameter is not required and does not have a
-default value, do NOT include it in the API URL, unless you think
-it's relevant to the user's question.
+If a parameter is not required and doesn't have a default value, exclude it from the API URL 
+unless it's directly relevant to the user's question. Ensure that no parameter is included 
+as an empty value.
 You MUST extract the API URL, request METHOD and generate the BODY data in JSON format
 according to the user question if necessary.
 The parameters' names and BODY data keys MUST be obtained from the provided context.
@@ -23,9 +23,6 @@ Respond in valid json only in the below format and do NOT give any explanation.
 
 API Documentation:
 {api_docs}
-
-Base URL:
-{base_url}
 
 Question:
 {question}
