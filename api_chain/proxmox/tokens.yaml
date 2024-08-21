@@ -1,9 +1,0 @@
-- name: Proxmox-Node-HCM
-  base_url: "https://ns31418912.ip-54-38-37.eu:8006/"
-  token: PROXMOX_HCM_API_TOKEN
-  friendly-name: PROXMOX_HCM
-- name: ns31212248
-  base_url: "https://ns31212248.ip-51-178-74.eu:8006/"
-  token: NODE_5_API_TOKEN
-  friendly-name: Node_5
-
