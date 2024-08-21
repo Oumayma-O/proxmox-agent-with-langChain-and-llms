@@ -1,4 +1,3 @@
-# mygraph.py
 from fastapi import FastAPI
 from .proxmox.docs import _proxmox_api_docs
 from .proxmox.base import ProxmoxAPIChain
@@ -170,7 +169,7 @@ proxmox_graph.add_conditional_edges(
 )
 
 proxmox_graph.add_edge(START, "supervisor")
-chain = proxmox_graph.compile()
+compiled_graph = proxmox_graph.compile()
 
 
 # Define Pydantic model for request body
@@ -190,16 +189,18 @@ def out_playground(state: ProxmoxTeamState)  :
     return state[1][state[0]["supervisor"]["next"]]["messages"][-1]["output"]  
 
 
-final_chain = RunnableLambda(inp) | chain | RunnableLambda(out)
-final_chain_playground = RunnableLambda(inp) | chain | RunnableLambda(out_playground)
+final_compiled_graph = RunnableLambda(inp) | compiled_graph | RunnableLambda(out)
+final_compiled_graph_playground = RunnableLambda(inp) | compiled_graph | RunnableLambda(out_playground)
 
 
 # Initialize FastAPI app
-fastapi_app = FastAPI()
+app = FastAPI()
 
 # Add your main routes
-add_routes(fastapi_app, final_chain_playground, path="/imx")
-add_routes(fastapi_app, final_chain)
+add_routes(app, final_compiled_graph_playground, path="/pve")
+add_routes(app, final_compiled_graph)
+add_routes(app, compiled_graph , path="/without_runnables")
+
 
 # Define the router and redirection
 router = APIRouter()
@@ -209,8 +210,8 @@ async def redirect_to_invoke():
     return RedirectResponse(url="/invoke")
 
 # Include the router in the app
-fastapi_app.include_router(router)
+app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(fastapi_app, host="localhost", port=6001)
+    uvicorn.run(app, host="localhost", port=6001)
