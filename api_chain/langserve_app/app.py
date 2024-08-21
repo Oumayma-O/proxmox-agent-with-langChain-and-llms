@@ -6,6 +6,7 @@ from langchain.retrievers import ContextualCompressionRetriever
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.vectorstores.surrealdb import SurrealDBStore
+from fastapi.middleware.cors import CORSMiddleware
 from langchain_huggingface import HuggingFaceEmbeddings
 from dotenv import load_dotenv
 from langchain_core.output_parsers import JsonOutputParser
@@ -20,6 +21,8 @@ from langserve import add_routes
 from langchain_groq import ChatGroq
 from fastapi import FastAPI, APIRouter
 from fastapi.responses import RedirectResponse
+from pydantic_settings import BaseSettings
+import asyncio
 import base64
 import yaml
 import os
@@ -193,8 +196,27 @@ final_compiled_graph = RunnableLambda(inp) | compiled_graph | RunnableLambda(out
 final_compiled_graph_playground = RunnableLambda(inp) | compiled_graph | RunnableLambda(out_playground)
 
 
+
+class Settings(BaseSettings):
+    app_name: str = "proxmox"
+
+
+settings = Settings()
+
 # Initialize FastAPI app
 app = FastAPI()
+
+# Load environment variables
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+allowed_methods = os.getenv("ALLOWED_METHODS", "GET,POST").split(",")
+
+# Configure CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_methods=allowed_methods,
+    allow_headers=["*"],
+)
 
 # Add your main routes
 add_routes(app, final_compiled_graph_playground, path="/pve")
@@ -212,6 +234,19 @@ async def redirect_to_invoke():
 # Include the router in the app
 app.include_router(router)
 
+fastapi_host = os.getenv("FASTAPI_HOST", "localhost")
+fastapi_port = int(os.getenv("FASTAPI_PORT"))
+
+async def print_messages():
+    async for message in compiled_graph.astream({
+            "messages": ["list Vms on node 'Proxmox-Node-HCM'"],
+            "next": None,
+            "team_members": []
+        }):
+        print(message)
+ 
 if __name__ == "__main__":
+    #asyncio.run(print_messages())
+
     import uvicorn
-    uvicorn.run(app, host="localhost", port=6001)
+    uvicorn.run(app, host=fastapi_host, port=fastapi_port)

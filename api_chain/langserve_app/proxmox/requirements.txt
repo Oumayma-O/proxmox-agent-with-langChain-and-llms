@@ -25,4 +25,5 @@ python-dotenv
 requests
 flash-attention
 langserve[all]
+pydantic-settings
 -f https://download.pytorch.org/whl/cu124
