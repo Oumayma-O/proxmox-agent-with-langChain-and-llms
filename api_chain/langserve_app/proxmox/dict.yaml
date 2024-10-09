@@ -6,4 +6,8 @@
   base_url: "https://ns31212248.ip-51-178-74.eu:8006/"
   token: NODE_5_API_TOKEN
   friendly-name: Node_5
+- name: coral-io-proxmox-lab
+  base_url: "https://ns3132391.ip-51-75-130.eu:8006/"
+  token: TEST_NODE_API_TOKEN
+  friendly-name: Test_node
 

@@ -81,13 +81,11 @@ class ProxmoxAPIChain(Chain):
     
     @property
     def resolved_base_url(self) -> str:
-        if not self.base_url:
-            self.base_url = os.getenv("PROXMOX_BASE_URL")
         return self.base_url
 
     @root_validator(pre=True)
     def validate_base_url(cls, values: Dict) -> Dict:
-        _base_url = values.get('base_url') or os.getenv("PROXMOX_BASE_URL")
+        _base_url = values.get('base_url') 
         if not _base_url:
             raise ValueError("Base URL for Proxmox API not provided.")
         values['base_url'] = _base_url
@@ -178,7 +176,8 @@ class ProxmoxAPIChain(Chain):
             print(f"\nRequest info: {json.dumps(request_info, indent=4)}")
 
         # Construct the full API URL dynamically by concatenating the base URL and request_info['api_url']
-        base_url = self.resolved_base_url
+        base_url = self.base_url
+        print(base_url)
         api_url = f"{base_url.rstrip('/')}/{_postprocess_text(request_info['api_url']).lstrip('/')}"
 
         if self.verbose:
@@ -327,7 +326,6 @@ class ProxmoxAPIChain(Chain):
             | llm
             | JsonOutputParser(pydantic_object=APIRequest)
         )
-        base_url = _validate_URL(base_url=base_url)
         headers = _validate_headers(headers=headers, pve_token=pve_token)
         requests_wrapper = PowerfulRequestsWrapper(headers=headers)
         api_response_chain = (

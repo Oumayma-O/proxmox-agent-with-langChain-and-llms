@@ -26,4 +26,5 @@ requests
 flash-attention
 langserve[all]
 pydantic-settings
+pydantic==1.10.13
 -f https://download.pytorch.org/whl/cu124

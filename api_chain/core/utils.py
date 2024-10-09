@@ -12,6 +12,7 @@ def _format_docs(docs: List[Document]) -> str:
     return "\n\n".join([doc.page_content for doc in docs])
 
 
+
 def _postprocess_text(
         text: str,
         remove_chars: Optional[Iterable[str]] = ["\n", "**"]

@@ -22,6 +22,7 @@ from langchain_groq import ChatGroq
 from fastapi import FastAPI, APIRouter
 from fastapi.responses import RedirectResponse
 from pydantic_settings import BaseSettings
+from langchain_google_genai import ChatGoogleGenerativeAI
 import asyncio
 import base64
 import yaml
@@ -119,13 +120,22 @@ def supervisor(state: ProxmoxTeamState) -> ProxmoxTeamState:
 
 # Initialize LLM for workers
 
-llm = ChatGroq(
+
+
+# Initialize the llm with the new model
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash-latest", temperature=0)
+
+
+"""llm = ChatGroq(
     model="llama-3.1-70b-versatile",
     temperature=0,
     max_tokens=None,
     timeout=None,
     max_retries=2,
-)
+    # other params...
+)"""
+
+
 agents = {}
 for node in proxmox_nodes:
     print(node['base_url'])
@@ -196,13 +206,6 @@ final_compiled_graph = RunnableLambda(inp) | compiled_graph | RunnableLambda(out
 final_compiled_graph_playground = RunnableLambda(inp) | compiled_graph | RunnableLambda(out_playground)
 
 
-
-class Settings(BaseSettings):
-    app_name: str = "proxmox"
-
-
-settings = Settings()
-
 # Initialize FastAPI app
 app = FastAPI()
 
@@ -250,3 +253,4 @@ if __name__ == "__main__":
 
     import uvicorn
     uvicorn.run(app, host=fastapi_host, port=fastapi_port)
+
